@@ -1,91 +1,63 @@
-//! An end-to-end example of using the SP1 SDK to generate a proof of a program that can be executed
-//! or have a core proof generated.
-//!
-//! You can run this script using the following command:
-//! ```shell
-//! RUST_LOG=info cargo run --release -- --execute
-//! ```
-//! or
-//! ```shell
-//! RUST_LOG=info cargo run --release -- --prove
-//! ```
+use sp1_sdk::{utils, ProverClient, SP1ProofWithPublicValues, SP1Stdin};
 
-use alloy_sol_types::SolType;
-use clap::Parser;
-use fibonacci_lib::PublicValuesStruct;
-use sp1_sdk::{ProverClient, SP1Stdin};
-
-/// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
-pub const FIBONACCI_ELF: &[u8] = include_bytes!("../../../elf/riscv32im-succinct-zkvm-elf");
-
-/// The arguments for the command.
-#[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
-struct Args {
-    #[clap(long)]
-    execute: bool,
-
-    #[clap(long)]
-    prove: bool,
-
-    #[clap(long, default_value = "20")]
-    n: u32,
-}
+/// The ELF we want to execute inside the zkVM.
+const ELF: &[u8] = include_bytes!("../../../elf/riscv32im-succinct-zkvm-elf");
 
 fn main() {
-    // Setup the logger.
-    sp1_sdk::utils::setup_logger();
+    // Setup logging.
+    utils::setup_logger();
 
-    // Parse the command line arguments.
-    let args = Args::parse();
+    // Create an input stream and write a hard-coded vector to it.
+    let image: Vec<u8> = vec![1, 2, 3];
+    print!("image data {}, {}", image[0], image[1]);
 
-    if args.execute == args.prove {
-        eprintln!("Error: You must specify either --execute or --prove");
-        std::process::exit(1);
-    }
+    // The input stream that the program will read from using `sp1_zkvm::io::read`.
+    // Note that the types of the elements in the input stream must match the types being
+    // read in the program.
+    let mut stdin = SP1Stdin::new();
+    stdin.write(&image);
 
-    // Setup the prover client.
+    // Create a `ProverClient` method.
     let client = ProverClient::new();
 
-    // Setup the inputs.
-    let mut stdin = SP1Stdin::new();
-    stdin.write(&args.n);
+    // Execute the program using the `ProverClient.execute` method, without generating a proof.
+    let (_, report) = client.execute(ELF, stdin.clone()).run().unwrap();
+    println!(
+        "executed program with {} cycles",
+        report.total_instruction_count()
+    );
 
-    println!("n: {}", args.n);
+    // Generate the proof for the given program and input.
+    let (pk, vk) = client.setup(ELF);
+    let mut proof = client.prove(&pk, stdin).run().unwrap();
 
-    if args.execute {
-        // Execute the program
-        let (output, report) = client.execute(FIBONACCI_ELF, stdin).run().unwrap();
-        println!("Program executed successfully.");
+    println!("generated proof");
 
-        // Read the output.
-        let decoded = PublicValuesStruct::abi_decode(output.as_slice(), true).unwrap();
-        let PublicValuesStruct { n, a, b } = decoded;
-        println!("n: {}", n);
-        println!("a: {}", a);
-        println!("b: {}", b);
+    // Read and verify the output.
+    //
+    // Note that this output is read from values commited to in the program using
+    // `sp1_zkvm::io::commit`.
+    //let _ = proof.public_values.read::<u32>();
+    let a: u8 = proof.public_values.read::<u8>();
+    let b: u8 = proof.public_values.read::<u8>();
 
-        let (expected_a, expected_b) = fibonacci_lib::fibonacci(n);
-        assert_eq!(a, expected_a);
-        assert_eq!(b, expected_b);
-        println!("Values are correct!");
+    println!("a: {}", a);
+    println!("b: {}", b);
 
-        // Record the number of cycles executed.
-        println!("Number of cycles: {}", report.total_instruction_count());
-    } else {
-        // Setup the program for proving.
-        let (pk, vk) = client.setup(FIBONACCI_ELF);
+    // Verify proof and public values
+    client.verify(&proof, &vk).expect("verification failed");
 
-        // Generate the proof
-        let proof = client
-            .prove(&pk, stdin)
-            .run()
-            .expect("failed to generate proof");
+    // Test a round trip of proof serialization and deserialization.
+    proof
+        .save("proof-with-pis.bin")
+        .expect("saving proof failed");
+    let deserialized_proof =
+        SP1ProofWithPublicValues::load("proof-with-pis.bin").expect("loading proof failed");
 
-        println!("Successfully generated proof!");
+    // Verify the deserialized proof.
+    client
+        .verify(&deserialized_proof, &vk)
+        .expect("verification failed");
 
-        // Verify the proof.
-        client.verify(&proof, &vk).expect("failed to verify proof");
-        println!("Successfully verified proof!");
-    }
+    println!("successfully generated and verified proof for the program!")
 }
