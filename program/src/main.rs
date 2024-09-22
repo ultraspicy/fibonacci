@@ -1,6 +1,6 @@
-//! Original goal: we want to prove the resulting image is the output of original image using ffmpeg
+//! Original goal: we want to prove the resulting video is the output of original video using ffmpeg
 //!
-//! This is difficult since ffmpeg has system-specifc implementation, so it is not always
+//! This is difficult since ffmpeg has system-specifc implementation, so not every algos are always
 //! reproducible. Instead we have implemented our own simplified ffmpeg algothrim that mimics ffmpeg.
 //! Under such, we not only need to prove that the output is indeed processed result of original
 //! image, we also  need to prove the output of ffmeg (outpu1) and output of our own (output2)
@@ -34,19 +34,15 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 
-use fibonacci_lib::{fibonacci, PublicValuesStruct, Context};
-use std::cmp::{max, min};
-use std::fs::File;
-use std::io::{BufRead, BufReader, Write};
-use std::path::Path;
-
+use lib::Context;
 pub fn main() {
-    // Read an input to the program.
-    //
     // Behind the scenes, this compiles down to a system call which handles reading inputs
     // from the prover.
     let c = sp1_zkvm::io::read::<Context>();
-    let image: Vec<u8> = sp1_zkvm::io::read::<Vec<u8>>();
+    // original image (in code u8 vector for RGB or YUV channel data) that deserialized from each 
+    // frame.
+    let original_image: Vec<u8> = sp1_zkvm::io::read::<Vec<u8>>();
+    // ffmpeg resized image, we try
     let target_image: Vec<u8> = sp1_zkvm::io::read::<Vec<u8>>();
 
     let mut tmp = vec![0u8; c.dst_w as usize * c.src_h as usize];
@@ -54,8 +50,7 @@ pub fn main() {
 
     // hard code here
     const FILTER_BITS: i32 = 14;
-    const FILTER_SCALE: i32 = 1 << FILTER_BITS;
-
+    //const FILTER_SCALE: i32 = 1 << FILTER_BITS;
 
     // Horizontal scaling
     for y in 0..c.src_h as usize {
@@ -65,7 +60,7 @@ pub fn main() {
 
             for z in 0..c.filter_size {
                 if src_pos + (z as i32) < c.src_w {
-                    val += image[y * c.src_w as usize + (src_pos as usize + z)] as u32
+                    val += original_image[y * c.src_w as usize + (src_pos as usize + z)] as u32
                         * c.filter[x * c.filter_size + z] as u32;
                 }
             }
@@ -93,30 +88,9 @@ pub fn main() {
 
     let mut difference: u32 = 0;
     for i in 0..c.dst_w as usize * c.dst_h as usize{
-        difference += (dst[i] as i16 - target_image[i] as i16).abs() as u32;
+        difference += (dst[i] as i32 - target_image[i] as i32).unsigned_abs();
     }
 
     print!("difference: {:?}", &difference);
     sp1_zkvm::io::commit(&difference);
-
-    
-
-    // print!("image data: {:?}", image);
-
-    // Compute the n'th fibonacci number, using normal Rust code.
-    // let mut a = 0;
-    // let mut b = 1;
-    // for _ in 0..n {
-    //     let mut c = a + b;
-    //     c %= 7919; // Modulus to prevent overflow.
-    //     a = b;
-    //     b = c;
-    // }
-
-    // Write the output of the program.
-    //
-    // Behind the scenes, this also compiles down to a system call which handles writing
-    // outputs to the prover.
-    // sp1_zkvm::io::commit(&a);
-    // sp1_zkvm::io::commit(&b);
 }
