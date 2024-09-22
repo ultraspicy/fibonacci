@@ -34,14 +34,11 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 
-use alloy_sol_types::SolType;
 use fibonacci_lib::{fibonacci, PublicValuesStruct, Context};
 use std::cmp::{max, min};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
-
-
 
 pub fn main() {
     // Read an input to the program.
