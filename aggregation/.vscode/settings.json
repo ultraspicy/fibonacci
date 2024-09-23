@@ -1,7 +1,7 @@
 {
     "rust-analyzer.linkedProjects": [
-        "video-resizing/program/Cargo.toml",
-        "video-resizing/script/Cargo.toml"
+        "program/Cargo.toml",
+        "script/Cargo.toml"
     ],
     "rust-analyzer.check.overrideCommand": [
         "cargo",
