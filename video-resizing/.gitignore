@@ -17,4 +17,5 @@ pgo-data.profdata
 
 # Env
 .env
-/resources
+/resources/*
+!/resources/generate_test_fixture.py

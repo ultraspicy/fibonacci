@@ -86,11 +86,11 @@ pub fn main() {
         }
     }
 
-    let mut difference: Vec<usize> = Vec::new();
-    //let mut difference: usize = 0;
+    //let mut difference: Vec<usize> = Vec::new();
+    let mut difference: usize = 0;
     for i in 0..c.dst_w as usize * c.dst_h as usize{
-        // difference += (dst[i] as isize - target_image[i] as isize).unsigned_abs();
-        difference.push((dst[i] as isize - target_image[i] as isize).unsigned_abs());
+        difference += (dst[i] as isize - target_image[i] as isize).unsigned_abs();
+        //difference.push((dst[i] as isize - target_image[i] as isize).unsigned_abs());
     }
 
     //print!("difference: {:?}", &difference);

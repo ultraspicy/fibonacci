@@ -7,20 +7,21 @@ const ELF: &[u8] = include_bytes!("../../../elf/riscv32im-succinct-zkvm-elf");
 const FRAME_NUM: usize = 10;
 const input_width: i32 = 192;
 const input_height: i32 = 108;
-const output_width: i32 = 96;
-const output_height: i32 = 54;
+const output_width: i32 = 48;
+const output_height: i32 = 27;
 
 fn main() {
     // Setup logging.
     utils::setup_logger();
 
     for i in 1..=FRAME_NUM {
-        let filename = format!("../resources/ffmpeg_bilinear_output/output_{:03}.png", i);
+        let filename = format!("../../resources/ffmpeg_bilinear_output/output_{:03}.png", i);
+        println!("{:?}", filename);
     }
 
     //fake example
-    let input_file = "../resources/fake_image.txt";
-    let target_file = "../resources/fake_real_image.txt";
+    let input_file = "../../resources/fake_original_image.txt";
+    let target_file = "../../resources/fake_target_image.txt";
     let output_file = "image_output.txt";
 
     let context = Context::new(input_width, input_height, output_width, output_height).unwrap();
@@ -64,9 +65,11 @@ fn main() {
     // Note: if commit a Vec<> the proof time will be very long
     // for quick verification, use a usize to sum it up
     // TODO: investigate why commit to Vec<> will hurt the performance
-    let difference: Vec<usize> = proof.public_values.read::<Vec<usize>>();
-    println!("difference: {}", difference[0]);
-    // let difference: usize = proof.public_values.read::<usize>();
+
+    // let difference: Vec<usize> = proof.public_values.read::<Vec<usize>>();
+    // println!("difference: {}", difference[0]);
+    // ======================================================================
+    let difference: usize = proof.public_values.read::<usize>();
 
     // Verify proof and public values
     client.verify(&proof, &vk).expect("verification failed");
