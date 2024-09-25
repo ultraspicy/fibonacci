@@ -5,10 +5,10 @@ use sp1_sdk::{utils, ProverClient, SP1ProofWithPublicValues, SP1Stdin};
 const ELF: &[u8] = include_bytes!("../../../elf/riscv32im-succinct-zkvm-elf");
 
 const FRAME_NUM: usize = 10;
-const input_width: i32 = 192;
-const input_height: i32 = 108;
-const output_width: i32 = 48;
-const output_height: i32 = 27;
+const INPUT_WIDTH: i32 = 192;
+const INPUT_HEIGHT: i32 = 108;
+const OUTPUT_WIDTH: i32 = 48;
+const OUTPUT_HEIGHT: i32 = 27;
 
 fn main() {
     // Setup logging.
@@ -24,7 +24,7 @@ fn main() {
     let target_file = "../../resources/fake_target_image.txt";
     let output_file = "image_output.txt";
 
-    let context = Context::new(input_width, input_height, output_width, output_height).unwrap();
+    let context = Context::new(INPUT_WIDTH, INPUT_HEIGHT, OUTPUT_WIDTH, OUTPUT_HEIGHT).unwrap();
 
     // Get the Image
     let image: Vec<u8> = load_image_from_file(input_file);
