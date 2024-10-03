@@ -5,11 +5,11 @@ use sp1_sdk::{
 use lib::{load_image_from_file, Context};
 
 /// ELF that aggregates the proofs
-const AGGREGATION_ELF: &[u8] = include_bytes!("../../program/elf/riscv32im-succinct-zkvm-elf");
+const AGGREGATION_ELF: &[u8] = include_bytes!("../../../program/elf/riscv32im-succinct-zkvm-elf");
 
 /// ELF that resizs images
 const RESIZING_ELF: &[u8] =
-    include_bytes!("../../../video-resizing/program/elf/riscv32im-succinct-zkvm-elf");
+    include_bytes!("../../../../video-resizing/elf/riscv32im-succinct-zkvm-elf");
 
 const INPUT_WIDTH: i32 = 192;
 const INPUT_HEIGHT: i32 = 108;
@@ -32,39 +32,55 @@ fn main() {
     let client = ProverClient::new();
 
     // Setup the proving and verifying keys.
-    let (aggregation_pk, _) = client.setup(AGGREGATION_ELF);
+    let (aggregation_pk, aggregation_vk) = client.setup(AGGREGATION_ELF);
     let (resizing_pk, resizing_vk) = client.setup(RESIZING_ELF);
 
-    // TODO(jianfeng): Nested for loop to deal with series of imges and their RGB channel data
+    let input_file = "../../resources/fake_original_image.txt";
+    let target_file = "../../resources/fake_target_image.txt";
+    let context = Context::new(INPUT_WIDTH, INPUT_HEIGHT, OUTPUT_WIDTH, OUTPUT_HEIGHT).unwrap();
+    let image: Vec<u8> = load_image_from_file(input_file);
+    let target_image: Vec<u8> = load_image_from_file(target_file);
 
-    // Generate the fibonacci proofs.
-    let proof_1 = tracing::info_span!("generate proof for the first frame").in_scope(|| {
+    // TODO(jianfeng): Nested for loop to deal with series of imges and their RGB channel data
+    let proof_1 = tracing::info_span!("generate proof for the R").in_scope(|| {
         let mut stdin = SP1Stdin::new();
-        stdin.write(&10);
+        stdin.write(&context);
+        stdin.write(&image);
+        stdin.write(&target_image);
         client
             .prove(&resizing_pk, stdin)
             .compressed()
             .run()
             .expect("proving failed")
     });
-    let proof_2 = tracing::info_span!("generate proof for the second frame").in_scope(|| {
+
+    print!("proof_1 generated");
+    
+    let proof_2 = tracing::info_span!("generate proof for the G").in_scope(|| {
         let mut stdin = SP1Stdin::new();
-        stdin.write(&20);
+        stdin.write(&context);
+        stdin.write(&image);
+        stdin.write(&target_image);
         client
             .prove(&resizing_pk, stdin)
             .compressed()
             .run()
             .expect("proving failed")
     });
-    let proof_3 = tracing::info_span!("generate proof for the third frame").in_scope(|| {
+    print!("proof_2 generated");
+
+    let proof_3 = tracing::info_span!("generate proof for the B").in_scope(|| {
         let mut stdin = SP1Stdin::new();
-        stdin.write(&30);
+        stdin.write(&context);
+        stdin.write(&image);
+        stdin.write(&target_image);
         client
             .prove(&resizing_pk, stdin)
             .compressed()
             .run()
             .expect("proving failed")
     });
+    print!("proof_3 generated");
 
     // Setup the inputs to the aggregation program.
     let input_1 = AggregationInput {
@@ -82,6 +98,7 @@ fn main() {
     let inputs = vec![input_1, input_2, input_3];
 
     // Aggregate the proofs.
+    print!("proof aggregation started");
     tracing::info_span!("aggregate the proofs").in_scope(|| {
         let mut stdin = SP1Stdin::new();
 
@@ -117,4 +134,5 @@ fn main() {
             .run()
             .expect("proving failed");
     });
+    print!("proof aggregation finished");
 }
