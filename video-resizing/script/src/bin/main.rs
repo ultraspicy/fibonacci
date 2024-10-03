@@ -14,15 +14,10 @@ fn main() {
     // Setup logging.
     utils::setup_logger();
 
-    for i in 1..=FRAME_NUM {
-        let filename = format!("../../resources/ffmpeg_bilinear_output/output_{:03}.png", i);
-        println!("{:?}", filename);
-    }
-
     //fake example
     let input_file = "../../resources/fake_original_image.txt";
     let target_file = "../../resources/fake_target_image.txt";
-    let output_file = "image_output.txt";
+    //let output_file = "image_output.txt";
 
     let context = Context::new(INPUT_WIDTH, INPUT_HEIGHT, OUTPUT_WIDTH, OUTPUT_HEIGHT).unwrap();
 
@@ -51,6 +46,12 @@ fn main() {
     // Generate the proof for the given program and input.
     let (pk, vk) = client.setup(ELF);
     let mut proof = client.prove(&pk, stdin).run().unwrap();
+
+    //client
+    // .prove(&resizing_pk, stdin)
+    // .compressed()
+    // .run()
+    // .expect("proving failed")
     println!("generated proof");
 
     // Read and verify the output.

@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "video-resizing/script",
+  "aggregation/script",
 ]
 resolver = "2"
 
