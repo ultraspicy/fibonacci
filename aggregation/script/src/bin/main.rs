@@ -35,67 +35,40 @@ fn main() {
     let (aggregation_pk, aggregation_vk) = client.setup(AGGREGATION_ELF);
     let (resizing_pk, resizing_vk) = client.setup(RESIZING_ELF);
 
-    let input_file = "../../resources/fake_original_image.txt";
-    let target_file = "../../resources/fake_target_image.txt";
-    let context = Context::new(INPUT_WIDTH, INPUT_HEIGHT, OUTPUT_WIDTH, OUTPUT_HEIGHT).unwrap();
-    let image: Vec<u8> = load_image_from_file(input_file);
-    let target_image: Vec<u8> = load_image_from_file(target_file);
-
-    // TODO(jianfeng): Nested for loop to deal with series of imges and their RGB channel data
-    let proof_1 = tracing::info_span!("generate proof for the R").in_scope(|| {
-        let mut stdin = SP1Stdin::new();
-        stdin.write(&context);
-        stdin.write(&image);
-        stdin.write(&target_image);
-        client
-            .prove(&resizing_pk, stdin)
-            .compressed()
-            .run()
-            .expect("proving failed")
-    });
-
-    print!("proof_1 generated");
+    let mut proofs: Vec<SP1ProofWithPublicValues> = vec![];
     
-    let proof_2 = tracing::info_span!("generate proof for the G").in_scope(|| {
-        let mut stdin = SP1Stdin::new();
-        stdin.write(&context);
-        stdin.write(&image);
-        stdin.write(&target_image);
-        client
-            .prove(&resizing_pk, stdin)
-            .compressed()
-            .run()
-            .expect("proving failed")
-    });
-    print!("proof_2 generated");
-
-    let proof_3 = tracing::info_span!("generate proof for the B").in_scope(|| {
-        let mut stdin = SP1Stdin::new();
-        stdin.write(&context);
-        stdin.write(&image);
-        stdin.write(&target_image);
-        client
-            .prove(&resizing_pk, stdin)
-            .compressed()
-            .run()
-            .expect("proving failed")
-    });
-    print!("proof_3 generated");
-
-    // Setup the inputs to the aggregation program.
-    let input_1 = AggregationInput {
-        proof: proof_1,
-        vk: resizing_vk.clone(),
-    };
-    let input_2 = AggregationInput {
-        proof: proof_2,
-        vk: resizing_vk.clone(),
-    };
-    let input_3 = AggregationInput {
-        proof: proof_3,
-        vk: resizing_vk.clone(),
-    };
-    let inputs = vec![input_1, input_2, input_3];
+    // iter over the frames 
+    for i in 1..=1 {
+        // iter over three channels
+        for channel in ["R", "G", "B"].iter() {
+            let proof_of_single_channel = tracing::info_span!("generate proof for the {} (iteration {})", channel, i).in_scope(|| {
+                let input_file = "../../resources/fake_original_image.txt";
+                let target_file = "../../resources/fake_target_image.txt";
+                let context = Context::new(INPUT_WIDTH, INPUT_HEIGHT, OUTPUT_WIDTH, OUTPUT_HEIGHT).unwrap();
+                let image: Vec<u8> = load_image_from_file(input_file);
+                let target_image: Vec<u8> = load_image_from_file(target_file);
+                let mut stdin = SP1Stdin::new();
+                stdin.write(&context);
+                stdin.write(&image);
+                stdin.write(&target_image);
+                client
+                    .prove(&resizing_pk, stdin)
+                    .compressed()
+                    .run()
+                    .expect("proving failed")
+            });
+            println!("proof_{:?} generated for {} frames", channel, i);
+            proofs.push(proof_of_single_channel);
+        }
+    
+    }
+    let mut inputs: Vec<AggregationInput> = vec![];
+    for proof in proofs.iter() {
+        inputs.push(AggregationInput{
+            proof: proof.clone(),
+            vk: resizing_vk.clone(),
+        });
+    }
 
     // Aggregate the proofs.
     print!("proof aggregation started");
