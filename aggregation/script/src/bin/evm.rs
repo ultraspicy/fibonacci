@@ -12,7 +12,6 @@
 
 use alloy_sol_types::SolType;
 use clap::{Parser, ValueEnum};
-use fibonacci_lib::PublicValuesStruct;
 use serde::{Deserialize, Serialize};
 use sp1_sdk::{HashableKey, ProverClient, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey};
 use std::path::PathBuf;
