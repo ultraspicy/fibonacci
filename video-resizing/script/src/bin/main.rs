@@ -15,8 +15,8 @@ fn main() {
     utils::setup_logger();
 
     //fake example
-    let input_file = "../../resources/fake_original_image.txt";
-    let target_file = "../../resources/fake_target_image.txt";
+    let input_file = "../../resources/ffmpeg_original_frames_192_108/output_001_R.txt";
+    let target_file = "../../resources/ffmpeg_resized_frames_48_27/output_001_R.txt";
     //let output_file = "image_output.txt";
 
     let context = Context::new(INPUT_WIDTH, INPUT_HEIGHT, OUTPUT_WIDTH, OUTPUT_HEIGHT).unwrap();

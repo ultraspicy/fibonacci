@@ -35,18 +35,18 @@ fn main() {
     let (aggregation_pk, aggregation_vk) = client.setup(AGGREGATION_ELF);
     let (resizing_pk, resizing_vk) = client.setup(RESIZING_ELF);
 
-    let mut proofs: Vec<SP1ProofWithPublicValues> = vec![];
-    
+    // Compute the proof of the vidoe
+    let mut proofs: Vec<SP1ProofWithPublicValues> = vec![];    
     // iter over the frames 
-    for i in 1..=1 {
+    for i in 1..=3 {
         // iter over three channels
         for channel in ["R", "G", "B"].iter() {
             let proof_of_single_channel = tracing::info_span!("generate proof for the {} (iteration {})", channel, i).in_scope(|| {
-                let input_file = "../../resources/fake_original_image.txt";
-                let target_file = "../../resources/fake_target_image.txt";
+                let input_file = format!("../../resources/ffmpeg_original_frames_192_108/output_{:03}_{}.txt", i, channel);
+                let target_file = format!("../../resources/ffmpeg_resized_frames_48_27/output_{:03}_{}.txt", i, channel);
                 let context = Context::new(INPUT_WIDTH, INPUT_HEIGHT, OUTPUT_WIDTH, OUTPUT_HEIGHT).unwrap();
-                let image: Vec<u8> = load_image_from_file(input_file);
-                let target_image: Vec<u8> = load_image_from_file(target_file);
+                let image: Vec<u8> = load_image_from_file(&input_file);
+                let target_image: Vec<u8> = load_image_from_file(&target_file);
                 let mut stdin = SP1Stdin::new();
                 stdin.write(&context);
                 stdin.write(&image);

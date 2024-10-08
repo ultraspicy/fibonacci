@@ -39,10 +39,10 @@ pub fn main() {
     // Behind the scenes, this compiles down to a system call which handles reading inputs
     // from the prover.
     let c = sp1_zkvm::io::read::<Context>();
-    // original image (in code u8 vector for RGB or YUV channel data) that deserialized from each 
-    // frame.
+    // original image (in code u8 vector for RGB or YUV channel data) that 
+    // deserialized from each frame.
     let original_image: Vec<u8> = sp1_zkvm::io::read::<Vec<u8>>();
-    // ffmpeg resized image, we try
+    // ffmpeg output
     let target_image: Vec<u8> = sp1_zkvm::io::read::<Vec<u8>>();
 
     let mut tmp = vec![0u8; c.dst_w as usize * c.src_h as usize];
@@ -52,6 +52,7 @@ pub fn main() {
     const FILTER_BITS: i32 = 14;
     //const FILTER_SCALE: i32 = 1 << FILTER_BITS;
 
+    // Horizontal scaling + Vertical scaling is a over-simplified version of ffmpeg bilinear
     // Horizontal scaling
     for y in 0..c.src_h as usize {
         for x in 0..c.dst_w as usize {
@@ -68,7 +69,6 @@ pub fn main() {
             tmp[y * c.dst_w as usize + x] = ((val + (1 << (FILTER_BITS - 1))) >> FILTER_BITS) as u8;
         }
     }
-
     // Vertical scaling
     for y in 0..c.dst_h as usize {
         for x in 0..c.dst_w as usize {
