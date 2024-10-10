@@ -32,10 +32,12 @@
 // inside the zkVM.
 
 #![no_main]
-sp1_zkvm::entrypoint!(main);
-
 use lib::Context;
+sp1_zkvm::entrypoint!(main);
+#[sp1_derive::cycle_tracker]
+
 pub fn main() {
+    println!("cycle-tracker-start: setup");
     // Behind the scenes, this compiles down to a system call which handles reading inputs
     // from the prover.
     let c = sp1_zkvm::io::read::<Context>();
@@ -54,6 +56,8 @@ pub fn main() {
 
     // Horizontal scaling + Vertical scaling is a over-simplified version of ffmpeg bilinear
     // Horizontal scaling
+    println!("cycle-tracker-end: setup");
+    println!("cycle-tracker-start: horizental filter");
     for y in 0..c.src_h as usize {
         for x in 0..c.dst_w as usize {
             let src_pos = c.filter_pos[x];
@@ -69,6 +73,8 @@ pub fn main() {
             tmp[y * c.dst_w as usize + x] = ((val + (1 << (FILTER_BITS - 1))) >> FILTER_BITS) as u8;
         }
     }
+    println!("cycle-tracker-end: horizental filter");
+    println!("cycle-tracker-start: vertical filter");
     // Vertical scaling
     for y in 0..c.dst_h as usize {
         for x in 0..c.dst_w as usize {
@@ -85,14 +91,19 @@ pub fn main() {
             dst[y * c.dst_w as usize + x] = ((val + (1 << (FILTER_BITS - 1))) >> FILTER_BITS) as u8;
         }
     }
+    println!("cycle-tracker-end: vertical filter");
 
+    println!("cycle-tracker-start: compute com");
     //let mut difference: Vec<usize> = Vec::new();
     let mut difference: usize = 0;
     for i in 0..c.dst_w as usize * c.dst_h as usize{
         difference += (dst[i] as isize - target_image[i] as isize).unsigned_abs();
         //difference.push((dst[i] as isize - target_image[i] as isize).unsigned_abs());
     }
+    println!("cycle-tracker-end: compute com");
 
     //print!("difference: {:?}", &difference);
+    println!("cycle-tracker-start: commit");
     sp1_zkvm::io::commit(&difference);
+    println!("cycle-tracker-end: commit");
 }
