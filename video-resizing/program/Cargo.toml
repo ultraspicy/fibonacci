@@ -7,3 +7,4 @@ edition = "2021"
 alloy-sol-types = { workspace = true }
 sp1-zkvm = "2.0.0"
 lib = { path = "../lib" }
+sp1-derive = "2.0.0"

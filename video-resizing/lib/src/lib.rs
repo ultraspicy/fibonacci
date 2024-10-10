@@ -1,5 +1,4 @@
 use alloy_sol_types::sol;
-use std::cmp::{min, max};
 use serde::{Deserialize, Serialize};
 
 use std::fs::File;
