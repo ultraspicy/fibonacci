@@ -23,8 +23,6 @@ def decompose_image(file_path):
         print(f"Saved {name} channel to {output_file}")
     
     return r_channel, g_channel, b_channel
-    
-    return r_channel, g_channel, b_channel
 
 # Usage
 file_path = './../resources/ffmpeg_resized_frames_48_27/output_003.png'
