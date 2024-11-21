@@ -102,39 +102,55 @@ impl Context {
         Some(context)
     }
 
+    // horizontal filter setup
     fn init_filter(&mut self, src_w: i32, dst_w: i32, filter_size: usize) -> Result<(), ()> {
+        // Nov 20, 2024: bug, the impl can only support fitler size of 2
+        let filter_size_corrected = 2;
+        // notes for precompile
+        //  - +1 so that it rounds towards the nearest integer instead of always rounding down
+        //  - the core is src_w/dst_w, right/left shift is just a fixed-point representation
+        //  - x_inc is a pixel ratio from src to dst
         let x_inc: i64 = (((src_w as i64) << 16) / dst_w as i64 + 1) >> 1;
 
         self.filter_pos = vec![0; dst_w as usize];
-        self.filter = vec![0; dst_w as usize * filter_size];
+        self.filter = vec![0; dst_w as usize * filter_size_corrected];
 
         for i in 0..dst_w as usize {
+            // get the starting position of src image, it doesn't to be an integer since we are 
+            // using fixed-point. We multiply a big number so the fractional is also scaled up 
+            // propotionally with i
             let src_pos: i64 = (i as i64 * x_inc) >> 15;
+            // normalize the fractional to FILTER_BITS
+            // so the left weight an right weight will sum to 1
             let xx_inc = x_inc & 0xffff;
-            let xx = (xx_inc * (1 << FILTER_BITS) / x_inc) as i32;
+            let xx = (xx_inc * (1 << FILTER_BITS) / x_inc) as i32; 
 
+ 
             self.filter_pos[i] = src_pos as i32;
-
-            for j in 0..filter_size {
+            // structure of filter weigjt
+            // [pixel1_weight1, pixel1_weight2, pixel2_weight1, pixel2_weight1 ...]
+            for j in 0..filter_size_corrected {
                 let coeff = if j == 0 {
                     (1 << FILTER_BITS) - xx
                 } else {
                     xx
                 };
-                self.filter[i * filter_size + j] = coeff as i16;
+                self.filter[i * filter_size_corrected + j] = coeff as i16;
             }
 
-            let mut sum = 0;
-            for j in 0..filter_size {
-                sum += self.filter[i * filter_size + j] as i64;
-            }
+            // minor adjustment if the two weight doesn't add up to 1 (FILTER_SCALE)
+            // comment out for simplify precompile
+            // let mut sum = 0;
+            // for j in 0..filter_size_corrected {
+            //     sum += self.filter[i * filter_size_corrected + j] as i64;
+            // }
 
-            if sum != FILTER_SCALE as i64 {
-                for j in 0..filter_size {
-                    let coeff = (self.filter[i * filter_size + j] as i64 * FILTER_SCALE as i64) / sum;
-                    self.filter[i * filter_size + j] = coeff as i16;
-                }
-            }
+            // if sum != FILTER_SCALE as i64 {
+            //     for j in 0..filter_size_corrected {
+            //         let coeff = (self.filter[i * filter_size_corrected + j] as i64 * FILTER_SCALE as i64) / sum;
+            //         self.filter[i * filter_size_corrected + j] = coeff as i16;
+            //     }
+            // }
         }
 
         Ok(())

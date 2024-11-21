@@ -65,8 +65,14 @@ pub fn main() {
 
             for z in 0..c.filter_size {
                 if src_pos + (z as i32) < c.src_w {
-                    val += original_image[y * c.src_w as usize + (src_pos as usize + z)] as u32
-                        * c.filter[x * c.filter_size + z] as u32;
+                    // create a var
+                    // instead of +z, +1 each time
+                    // print out the filter first and try to get rid of multiplication
+                    // performance impli on u8/u32
+                    // moving avg
+                    // add RISC-V instruction to SP1 to speed up the z -loop
+                    // Fiat-ch spot checking
+                    val += original_image[y * c.src_w as usize + (src_pos as usize + z)] as u32 * c.filter[x * c.filter_size + z] as u32;
                 }
             }
 
@@ -80,7 +86,6 @@ pub fn main() {
         for x in 0..c.dst_w as usize {
             let src_pos = c.v_lum_filter_pos[y];
             let mut val = 0;
-
             for z in 0..c.v_lum_filter_size {
                 if src_pos + (z as i32) < c.src_h {
                     val += tmp[((src_pos + z as i32) as usize) * c.dst_w as usize + x] as u32
@@ -95,15 +100,22 @@ pub fn main() {
 
     println!("cycle-tracker-start: compute com");
     //let mut difference: Vec<usize> = Vec::new();
-    let mut difference: usize = 0;
+    //let mut difference: usize = 0;
+    let limit = 100;
+    let mut within_limit = true;
     for i in 0..c.dst_w as usize * c.dst_h as usize{
-        difference += (dst[i] as isize - target_image[i] as isize).unsigned_abs();
+        let difference = (dst[i] as isize - target_image[i] as isize).unsigned_abs();
+        if difference >= limit {
+            within_limit = false;
+            sp1_zkvm::io::commit(&within_limit);
+            return
+        }
         //difference.push((dst[i] as isize - target_image[i] as isize).unsigned_abs());
     }
     println!("cycle-tracker-end: compute com");
 
     //print!("difference: {:?}", &difference);
     println!("cycle-tracker-start: commit");
-    sp1_zkvm::io::commit(&difference);
+    sp1_zkvm::io::commit(&within_limit);
     println!("cycle-tracker-end: commit");
 }
