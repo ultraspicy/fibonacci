@@ -5,19 +5,19 @@ use sp1_sdk::{utils, ProverClient, SP1ProofWithPublicValues, SP1Stdin};
 const ELF: &[u8] = include_bytes!("../../../elf/riscv32im-succinct-zkvm-elf");
 
 const FRAME_NUM: usize = 10;
-const INPUT_WIDTH: i32 = 1920;
-const INPUT_HEIGHT: i32 = 1080;
-const OUTPUT_WIDTH: i32 = 480;
-const OUTPUT_HEIGHT: i32 = 270;
+const INPUT_WIDTH: i32 = 192;
+const INPUT_HEIGHT: i32 = 108;
+const OUTPUT_WIDTH: i32 = 48;
+const OUTPUT_HEIGHT: i32 = 27;
 
 fn main() {
     // Setup logging.
     utils::setup_logger();
 
     //fake example
-    let input_file = "../../resources/sand_19201080_R_channel.txt";// "../../resources/ffmpeg_original_frames_192_108/output_001_R.txt";
-    let target_file = "../../resources/custom_bilinear_r.txt"; //"../../resources/ffmpeg_resized_frames_48_27/output_001_R.txt";
-    //let output_file = "image_output.txt";
+    let input_file = "../../resources/ffmpeg_original_frames_192_108/output_001_R.txt"; // "../../resources/ffmpeg_original_frames_192_108/output_001_R.txt";
+    let target_file = "../../resources/ffmpeg_resized_frames_48_27/output_001_R.txt"; //"../../resources/ffmpeg_resized_frames_48_27/output_001_R.txt";
+                                                                                      //let output_file = "image_output.txt";
 
     let context = Context::new(INPUT_WIDTH, INPUT_HEIGHT, OUTPUT_WIDTH, OUTPUT_HEIGHT).unwrap();
 
@@ -70,8 +70,9 @@ fn main() {
     // ======================================================================
     //let difference: Vec<usize> = proof.public_values.read::<Vec<usize>>();
     //println!("difference[0]: {}", difference[0]);
-    let difference: usize = proof.public_values.read::<usize>();
-
+    let within_limit: bool = proof.public_values.read::<bool>();
+    
+    assert!(within_limit, "within_limit = {}", within_limit);
     // Verify proof and public values
     client.verify(&proof, &vk).expect("verification failed");
 

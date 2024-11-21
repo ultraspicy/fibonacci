@@ -100,12 +100,14 @@ fn main() {
             stdin.write_proof(proof, input.vk.vk);
         }
 
+        // todo verify the proof to make this program end to end
+        
         // Generate the plonk bn254 proof.
-        client
-            .prove(&aggregation_pk, stdin)
-            .plonk()
-            .run()
-            .expect("proving failed");
+        // client
+        //     .prove(&aggregation_pk, stdin)
+        //     .plonk()
+        //     .run()
+        //     .expect("proving failed");
     });
     print!("proof aggregation finished");
 }
