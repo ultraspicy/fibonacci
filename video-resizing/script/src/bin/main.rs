@@ -30,8 +30,8 @@ fn main() {
     // read in the program.
     let mut stdin = SP1Stdin::new();
     stdin.write(&context);
-    stdin.write(&image);
-    stdin.write(&target_image);
+    stdin.write_vec(image);
+    stdin.write_vec(target_image);
 
     // Create a `ProverClient` method.
     let client = ProverClient::new();
@@ -71,7 +71,7 @@ fn main() {
     //let difference: Vec<usize> = proof.public_values.read::<Vec<usize>>();
     //println!("difference[0]: {}", difference[0]);
     let within_limit: bool = proof.public_values.read::<bool>();
-    
+
     assert!(within_limit, "within_limit = {}", within_limit);
     // Verify proof and public values
     client.verify(&proof, &vk).expect("verification failed");

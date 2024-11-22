@@ -41,11 +41,11 @@ pub fn main() {
     // Behind the scenes, this compiles down to a system call which handles reading inputs
     // from the prover.
     let c = sp1_zkvm::io::read::<Context>();
-    // original image (in code u8 vector for RGB or YUV channel data) that 
+    // original image (in code u8 vector for RGB or YUV channel data) that
     // deserialized from each frame.
-    let original_image: Vec<u8> = sp1_zkvm::io::read::<Vec<u8>>();
+    let original_image: Vec<u8> = sp1_zkvm::io::read_vec();
     // ffmpeg output
-    let target_image: Vec<u8> = sp1_zkvm::io::read::<Vec<u8>>();
+    let target_image: Vec<u8> = sp1_zkvm::io::read_vec();
 
     let mut tmp = vec![0u8; c.dst_w as usize * c.src_h as usize];
     let mut dst = vec![0u8; c.dst_w as usize * c.dst_h as usize];
@@ -72,7 +72,8 @@ pub fn main() {
                     // moving avg
                     // add RISC-V instruction to SP1 to speed up the z -loop
                     // Fiat-ch spot checking
-                    val += original_image[y * c.src_w as usize + (src_pos as usize + z)] as u32 * c.filter[x * c.filter_size + z] as u32;
+                    val += original_image[y * c.src_w as usize + (src_pos as usize + z)] as u32
+                        * c.filter[x * c.filter_size + z] as u32;
                 }
             }
 
@@ -103,12 +104,12 @@ pub fn main() {
     //let mut difference: usize = 0;
     let limit = 100;
     let mut within_limit = true;
-    for i in 0..c.dst_w as usize * c.dst_h as usize{
+    for i in 0..c.dst_w as usize * c.dst_h as usize {
         let difference = (dst[i] as isize - target_image[i] as isize).unsigned_abs();
         if difference >= limit {
             within_limit = false;
             sp1_zkvm::io::commit(&within_limit);
-            return
+            return;
         }
         //difference.push((dst[i] as isize - target_image[i] as isize).unsigned_abs());
     }
