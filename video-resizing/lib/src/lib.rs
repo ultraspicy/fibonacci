@@ -1,30 +1,8 @@
-use alloy_sol_types::sol;
 use serde::{Deserialize, Serialize};
 
 use std::fs::File;
-use std::io::{BufReader, BufRead};
+use std::io::{BufRead, BufReader};
 use std::path::Path;
-
-sol! {
-    /// The public values encoded as a struct that can be easily deserialized inside Solidity.
-    struct PublicValuesStruct {
-        uint32 n;
-        uint32 a;
-        uint32 b;
-    }
-}
-
-/// Compute the n'th fibonacci number (wrapping around on overflows), using normal Rust code.
-pub fn fibonacci(n: u32) -> (u32, u32) {
-    let mut a = 0u32;
-    let mut b = 1u32;
-    for _ in 0..n {
-        let c = a.wrapping_add(b);
-        a = b;
-        b = c;
-    }
-    (a, b)
-}
 
 // demo image processing
 // pub fn demo_processing(image: &[u8]) -> Vec<u8> {
@@ -80,7 +58,7 @@ pub struct Context {
 
 impl Context {
     pub fn new(src_w: i32, src_h: i32, dst_w: i32, dst_h: i32) -> Option<Self> {
-        let filter_size = 2; //should be 4 
+        let filter_size = 2; //should be 4
         let mut context = Context {
             filter_pos: Vec::new(),
             filter: Vec::new(),
@@ -89,7 +67,7 @@ impl Context {
             v_lum_filter: Vec::new(),
             v_lum_filter_size: filter_size,
             dst_w,
-            dst_h ,
+            dst_h,
             src_w,
             src_h,
         };
@@ -103,7 +81,7 @@ impl Context {
     }
 
     // horizontal filter setup
-    fn init_filter(&mut self, src_w: i32, dst_w: i32, filter_size: usize) -> Result<(), ()> {
+    fn init_filter(&mut self, src_w: i32, dst_w: i32, _filter_size: usize) -> Result<(), ()> {
         // Nov 20, 2024: bug, the impl can only support fitler size of 2
         let filter_size_corrected = 2;
         // notes for precompile
@@ -116,25 +94,20 @@ impl Context {
         self.filter = vec![0; dst_w as usize * filter_size_corrected];
 
         for i in 0..dst_w as usize {
-            // get the starting position of src image, it doesn't to be an integer since we are 
-            // using fixed-point. We multiply a big number so the fractional is also scaled up 
+            // get the starting position of src image, it doesn't to be an integer since we are
+            // using fixed-point. We multiply a big number so the fractional is also scaled up
             // propotionally with i
             let src_pos: i64 = (i as i64 * x_inc) >> 15;
             // normalize the fractional to FILTER_BITS
             // so the left weight an right weight will sum to 1
             let xx_inc = x_inc & 0xffff;
-            let xx = (xx_inc * (1 << FILTER_BITS) / x_inc) as i32; 
+            let xx = (xx_inc * (1 << FILTER_BITS) / x_inc) as i32;
 
- 
             self.filter_pos[i] = src_pos as i32;
             // structure of filter weigjt
             // [pixel1_weight1, pixel1_weight2, pixel2_weight1, pixel2_weight1 ...]
             for j in 0..filter_size_corrected {
-                let coeff = if j == 0 {
-                    (1 << FILTER_BITS) - xx
-                } else {
-                    xx
-                };
+                let coeff = if j == 0 { (1 << FILTER_BITS) - xx } else { xx };
                 self.filter[i * filter_size_corrected + j] = coeff as i16;
             }
 
@@ -191,7 +164,7 @@ impl Context {
 }
 
 pub fn load_image_from_file(input_file: &str) -> Vec<u8> {
-    let mut image: Vec<u8> = Vec::new(); 
+    let mut image: Vec<u8> = Vec::new();
 
     let input_path = Path::new(input_file);
     let file = File::open(&input_path).expect("Failed to open input file");
@@ -221,14 +194,7 @@ pub fn load_image_from_file(input_file: &str) -> Vec<u8> {
     image
 }
 
-
-pub fn scale_image(
-    c: &Context,
-    src: &[u8],
-    src_stride: i32,
-    dst: &mut [u8],
-    dst_stride: i32,
-) {
+pub fn scale_image(c: &Context, src: &[u8], src_stride: i32, dst: &mut [u8], dst_stride: i32) {
     let mut tmp = vec![0u8; c.dst_w as usize * c.src_h as usize];
 
     // Horizontal scaling
@@ -261,7 +227,8 @@ pub fn scale_image(
                 }
             }
 
-            dst[y * dst_stride as usize + x] = ((val + (1 << (FILTER_BITS - 1))) >> FILTER_BITS) as u8;
+            dst[y * dst_stride as usize + x] =
+                ((val + (1 << (FILTER_BITS - 1))) >> FILTER_BITS) as u8;
         }
     }
 }
