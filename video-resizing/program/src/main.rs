@@ -32,7 +32,7 @@
 // inside the zkVM.
 
 #![no_main]
-use lib::Context;
+use lib::ResizeContext;
 sp1_zkvm::entrypoint!(main);
 #[sp1_derive::cycle_tracker]
 
@@ -40,7 +40,7 @@ pub fn main() {
     println!("cycle-tracker-start: setup");
     // Behind the scenes, this compiles down to a system call which handles reading inputs
     // from the prover.
-    let c = sp1_zkvm::io::read::<Context>();
+    let c = sp1_zkvm::io::read::<ResizeContext>();
     // original image (in code u8 vector for RGB or YUV channel data) that
     // deserialized from each frame.
     let original_image: Vec<u8> = sp1_zkvm::io::read_vec();
@@ -57,7 +57,7 @@ pub fn main() {
     // Horizontal scaling + Vertical scaling is a over-simplified version of ffmpeg bilinear
     // Horizontal scaling
     println!("cycle-tracker-end: setup");
-    println!("cycle-tracker-start: horizental filter");
+    println!("cycle-tracker-start: horizontal filter");
     for y in 0..c.src_h as usize {
         for x in 0..c.dst_w as usize {
             let src_pos = c.filter_pos[x];
@@ -80,7 +80,7 @@ pub fn main() {
             tmp[y * c.dst_w as usize + x] = ((val + (1 << (FILTER_BITS - 1))) >> FILTER_BITS) as u8;
         }
     }
-    println!("cycle-tracker-end: horizental filter");
+    println!("cycle-tracker-end: horizontal filter");
     println!("cycle-tracker-start: vertical filter");
     // Vertical scaling
     for y in 0..c.dst_h as usize {

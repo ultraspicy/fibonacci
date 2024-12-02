@@ -43,7 +43,7 @@ const FILTER_BITS: i32 = 14;
 const FILTER_SCALE: i32 = 1 << FILTER_BITS;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Context {
+pub struct ResizeContext {
     pub filter_pos: Vec<i32>,
     pub filter: Vec<i16>,
     pub filter_size: usize,
@@ -56,10 +56,10 @@ pub struct Context {
     pub src_h: i32,
 }
 
-impl Context {
+impl ResizeContext {
     pub fn new(src_w: i32, src_h: i32, dst_w: i32, dst_h: i32) -> Option<Self> {
         let filter_size = 2; //should be 4
-        let mut context = Context {
+        let mut context = ResizeContext {
             filter_pos: Vec::new(),
             filter: Vec::new(),
             filter_size,
@@ -194,7 +194,13 @@ pub fn load_image_from_file(input_file: &str) -> Vec<u8> {
     image
 }
 
-pub fn scale_image(c: &Context, src: &[u8], src_stride: i32, dst: &mut [u8], dst_stride: i32) {
+pub fn scale_image(
+    c: &ResizeContext,
+    src: &[u8],
+    src_stride: i32,
+    dst: &mut [u8],
+    dst_stride: i32,
+) {
     let mut tmp = vec![0u8; c.dst_w as usize * c.src_h as usize];
 
     // Horizontal scaling
