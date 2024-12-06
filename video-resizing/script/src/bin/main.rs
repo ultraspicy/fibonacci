@@ -1,4 +1,4 @@
-use lib::resize::{load_image_from_file, ResizeContext};
+use lib::{load_image_from_file, ResizeContext};
 use sp1_sdk::{utils, ProverClient, SP1ProofWithPublicValues, SP1Stdin};
 
 /// The ELF we want to execute inside the zkVM.
