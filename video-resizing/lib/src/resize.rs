@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
+use serde_json;
+use std::io::{self, Write};
 
 // demo image processing
 // pub fn demo_processing(image: &[u8]) -> Vec<u8> {
@@ -58,7 +60,7 @@ pub struct ResizeContext {
 
 impl ResizeContext {
     pub fn new(src_w: i32, src_h: i32, dst_w: i32, dst_h: i32) -> Option<Self> {
-        let filter_size = 2; //should be 4
+        let filter_size = 4; //should be 4
         let mut context = ResizeContext {
             filter_pos: Vec::new(),
             filter: Vec::new(),
@@ -83,7 +85,7 @@ impl ResizeContext {
     // horizontal filter setup
     fn init_filter(&mut self, src_w: i32, dst_w: i32, _filter_size: usize) -> Result<(), ()> {
         // Nov 20, 2024: bug, the impl can only support fitler size of 2
-        let filter_size_corrected = 2;
+        let filter_size_corrected = 4;
         // notes for precompile
         //  - +1 so that it rounds towards the nearest integer instead of always rounding down
         //  - the core is src_w/dst_w, right/left shift is just a fixed-point representation
@@ -197,13 +199,11 @@ pub fn load_image_from_file(input_file: &str) -> Vec<u8> {
 pub fn scale_image(
     c: &ResizeContext,
     src: &[u8],
-    src_stride: i32,
     dst: &mut [u8],
-    dst_stride: i32,
+    oracle: &[u8]
 ) {
     let mut tmp = vec![0u8; c.dst_w as usize * c.src_h as usize];
 
-    // Horizontal scaling
     for y in 0..c.src_h as usize {
         for x in 0..c.dst_w as usize {
             let src_pos = c.filter_pos[x];
@@ -211,7 +211,14 @@ pub fn scale_image(
 
             for z in 0..c.filter_size {
                 if src_pos + (z as i32) < c.src_w {
-                    val += src[y * src_stride as usize + (src_pos as usize + z)] as u32
+                        // create a var
+                        // instead of +z, +1 each time
+                        // print out the filter first and try to get rid of multiplication
+                        // performance impli on u8/u32
+                        // moving avg
+                        // add RISC-V instruction to SP1 to speed up the z -loop
+                        // Fiat-ch spot checking
+                    val += src[y * c.src_w as usize + (src_pos as usize + z)] as u32
                         * c.filter[x * c.filter_size + z] as u32;
                 }
             }
@@ -219,13 +226,13 @@ pub fn scale_image(
             tmp[y * c.dst_w as usize + x] = ((val + (1 << (FILTER_BITS - 1))) >> FILTER_BITS) as u8;
         }
     }
-
+    println!("cycle-tracker-end: horizontal filter");
+    println!("cycle-tracker-start: vertical filter");
     // Vertical scaling
     for y in 0..c.dst_h as usize {
         for x in 0..c.dst_w as usize {
             let src_pos = c.v_lum_filter_pos[y];
             let mut val = 0;
-
             for z in 0..c.v_lum_filter_size {
                 if src_pos + (z as i32) < c.src_h {
                     val += tmp[((src_pos + z as i32) as usize) * c.dst_w as usize + x] as u32
@@ -233,8 +240,34 @@ pub fn scale_image(
                 }
             }
 
-            dst[y * dst_stride as usize + x] =
-                ((val + (1 << (FILTER_BITS - 1))) >> FILTER_BITS) as u8;
+            dst[y * c.dst_w as usize + x] = ((val + (1 << (FILTER_BITS - 1))) >> FILTER_BITS) as u8;
         }
     }
+    use std::fs::File;
+    use std::io::Write;
+
+    let mut diff_counts = std::collections::HashMap::new();
+    for y in 0..c.dst_h as usize {
+        for x in 0..c.dst_w as usize {
+            let diff = (dst[y * c.dst_w as usize + x] as isize - oracle[y * c.dst_w as usize + x] as isize).unsigned_abs();
+            *diff_counts.entry(diff).or_insert(0) += 1;
+        }
+    }
+    let mut diff_counts_vec: Vec<_> = diff_counts.iter().collect();
+    diff_counts_vec.sort_by(|a, b| a.0.cmp(b.0));
+    let mut total_diff = 0;
+    println!("Sorted distribution of max_diff:");
+    for (diff, count) in diff_counts_vec {
+        total_diff += count;
+        println!("{}: {} : {}", diff, count, total_diff);
+        
+    }
+    println!("Total diff: {}", total_diff);
+
+}
+pub fn save_context_to_file(resize_context: &ResizeContext, file_path: &str) -> io::Result<()> {
+    let mut file = File::create(file_path)?;
+    let serialized = serde_json::to_string(resize_context)?;
+    writeln!(file, "{}", serialized)?;
+    Ok(())
 }

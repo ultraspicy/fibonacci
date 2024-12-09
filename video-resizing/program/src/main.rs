@@ -58,43 +58,54 @@ pub fn main() {
     // Horizontal scaling
     println!("cycle-tracker-end: setup");
     println!("cycle-tracker-start: horizontal filter");
+    let x_inc: i64 = (((c.src_w as i64) << 16) / c.dst_w as i64 + 1) >> 1;
+    let xx_inc = x_inc & 0xffff;
+    let xx = (xx_inc * (1 << FILTER_BITS) / x_inc) as i32;
+    let inv_xx = (1 << FILTER_BITS) - xx;
     for y in 0..c.src_h as usize {
+        let y_pos1 = y * c.src_w as usize;
         for x in 0..c.dst_w as usize {
-            let src_pos = c.filter_pos[x];
-            let mut val = 0;
+         //   let src_pos = c.filter_pos[x];
+         //  let mut val = 0;
+            let pos = y_pos1 + ((x as i64 * x_inc) >> 15) as usize;
+            let val1 = original_image[pos] as u32 * inv_xx as u32 + original_image[pos + 1] as u32 * xx as u32;
+            let val2 = original_image[pos + 2] as u32 * xx as u32 + original_image[pos + 3] as u32 * xx as u32;
+            // for z in 0..c.filter_size {
+            //     if src_pos + (z as i32) < c.src_w {
+            //         // create a var
+            //         // instead of +z, +1 each time
+            //         // print out the filter first and try to get rid of multiplication
+            //         // performance impli on u8/u32
+            //         // moving avg
+            //         // add RISC-V instruction to SP1 to speed up the z -loop
+            //         // Fiat-ch spot checking
+            //         val += original_image[y * c.src_w as usize + (src_pos as usize + z)] as u32
+            //             * c.filter[x * c.filter_size + z] as u32;
+            //     }
+            // }
 
-            for z in 0..c.filter_size {
-                if src_pos + (z as i32) < c.src_w {
-                    // create a var
-                    // instead of +z, +1 each time
-                    // print out the filter first and try to get rid of multiplication
-                    // performance impli on u8/u32
-                    // moving avg
-                    // add RISC-V instruction to SP1 to speed up the z -loop
-                    // Fiat-ch spot checking
-                    val += original_image[y * c.src_w as usize + (src_pos as usize + z)] as u32
-                        * c.filter[x * c.filter_size + z] as u32;
-                }
-            }
-
-            tmp[y * c.dst_w as usize + x] = ((val + (1 << (FILTER_BITS - 1))) >> FILTER_BITS) as u8;
+            tmp[y * c.dst_w as usize + x] = ((val1 + val2 + (1 << (FILTER_BITS - 1))) >> FILTER_BITS) as u8;
         }
     }
     println!("cycle-tracker-end: horizontal filter");
     println!("cycle-tracker-start: vertical filter");
-    // Vertical scaling
+
     for y in 0..c.dst_h as usize {
         for x in 0..c.dst_w as usize {
             let src_pos = c.v_lum_filter_pos[y];
-            let mut val = 0;
-            for z in 0..c.v_lum_filter_size {
-                if src_pos + (z as i32) < c.src_h {
-                    val += tmp[((src_pos + z as i32) as usize) * c.dst_w as usize + x] as u32
-                        * c.v_lum_filter[y * c.v_lum_filter_size + z] as u32;
-                }
-            }
+            let pos = x + src_pos as usize * c.dst_w as usize;
+            let filter_pos = y * c.v_lum_filter_size;
+           // let mut val = 0;
+           let val1 = tmp[pos] as u32 * c.v_lum_filter[filter_pos] as u32 + tmp[pos + c.dst_w as usize] as u32 * c.v_lum_filter[filter_pos + 1] as u32;
+            let val2 = tmp[pos + 2 * c.dst_w as usize] as u32 * c.v_lum_filter[filter_pos + 2] as u32 + tmp[pos + 3 * c.dst_w as usize] as u32 * c.v_lum_filter[filter_pos + 3] as u32;
+            // for z in 0..c.v_lum_filter_size {
+            //     if src_pos + (z as i32) < c.src_h {
+            //         val += tmp[((src_pos + z as i32) as usize) * c.dst_w as usize + x] as u32
+            //             * c.v_lum_filter[y * c.v_lum_filter_size + z] as u32;
+            //     }
+            // }
 
-            dst[y * c.dst_w as usize + x] = ((val + (1 << (FILTER_BITS - 1))) >> FILTER_BITS) as u8;
+            dst[y * c.dst_w as usize + x] = ((val1 + val2 + (1 << (FILTER_BITS - 1))) >> FILTER_BITS) as u8;
         }
     }
     println!("cycle-tracker-end: vertical filter");
@@ -114,7 +125,6 @@ pub fn main() {
         //difference.push((dst[i] as isize - target_image[i] as isize).unsigned_abs());
     }
     println!("cycle-tracker-end: compute com");
-
     //print!("difference: {:?}", &difference);
     println!("cycle-tracker-start: commit");
     sp1_zkvm::io::commit(&within_limit);
