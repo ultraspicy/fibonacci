@@ -4,6 +4,9 @@ pub use resize::*;
 pub mod gblur;
 pub use gblur::*;
 
+pub mod avgblur;
+pub use avgblur::*;
+
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
