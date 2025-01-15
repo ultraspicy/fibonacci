@@ -1,3 +1,4 @@
+use fixed::{traits::Fixed, types::extra::U32, FixedU64};
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
 
@@ -84,64 +85,81 @@ impl BlurContext {
         (postscale as f32, boundaryscale as f32, nu)
     }
 
-    fn horiz_slice(c: &BlurContext, src: &mut [f32]) {
+    fn horiz_slice(c: &BlurContext, src: &mut [FixedU64<U32>]) {
         let (height, width) = (c.height, c.width);
+        let boundaryscale = FixedU64::<U32>::from_num(c.boundaryscale);
+        let nu = FixedU64::<U32>::from_num(c.nu);
         for y in 0..height {
             for _step in 0..c.steps {
                 let row_start = (width * y);
-                src[row_start] *= c.boundaryscale;
+                src[row_start] *= boundaryscale;
 
                 for x in 1..width {
-                    src[row_start + x] += c.nu * src[row_start + x - 1]
+                    src[row_start + x] += nu * src[row_start + x - 1]
                 }
-                src[row_start + width - 1] *= c.boundaryscale;
+                src[row_start + width - 1] *= boundaryscale;
 
                 for x in (1..width).rev() {
-                    src[row_start + x - 1] += c.nu * src[row_start + x];
+                    src[row_start + x - 1] += nu * src[row_start + x];
                 }
             }
         }
     }
 
-    fn verti_slice(c: &BlurContext, src: &mut [f32]) {
+    fn verti_slice(c: &BlurContext, src: &mut [FixedU64<U32>]) {
         let width = c.width;
         let numpixels = src.len();
+        let boundaryscale_v = FixedU64::<U32>::from_num(c.boundaryscale);
+        let nu_v = FixedU64::<U32>::from_num(c.nu);
         for x in 0..width {
             for _step in 0..c.steps {
                 let column_start = x;
-                src[column_start] *= c.boundaryscale_v;
+                src[column_start] *= boundaryscale_v;
 
-                for i in (column_start..src.len()).step_by(width) {
-                    src[i] += c.nu_v * src[i - width];
+                for i in ((column_start + width)..numpixels).step_by(width) {
+                    src[i] += nu_v * src[i - width];
                 }
 
-                src[numpixels - width + column_start] *= c.boundaryscale_v;
+                src[numpixels - width + column_start] *= boundaryscale_v;
 
                 for i in ((column_start + width)..numpixels).step_by(width).rev() {
-                    src[i - width] += c.nu_v * src[i]
+                    src[i - width] += nu_v * src[i]
                 }
             }
         }
     }
 
-    fn postscale(c: &BlurContext, src: &mut [f32], output: &mut [u8]) {
-        let (min_f, max_f) = (255f32, 0f32); // Limiting to the case where we have 8 bit color channels
-        let postscale_factor = c.postscale * c.postscale_v;
+    fn postscale(c: &BlurContext, src: &mut [FixedU64<U32>], output: &mut [u8]) {
+        let (min_f, max_f) = (255, 0); // Limiting to the case where we have 8 bit color channels
+        let postscale_factor = FixedU64::<U32>::from_num(c.postscale * c.postscale_v);
 
+        println!("cycle-tracker-start: mul pass");
         for i in 0..src.len() {
             src[i] *= postscale_factor;
-            output[i] = src[i].max(min_f).min(max_f).round() as u8;
+        }
+        println!("cycle-tracker-end: mul pass");
+
+        for i in 0..src.len() {
+            output[i] = src[i].to_num::<u32>().max(min_f).min(max_f) as u8;
         }
     }
 }
 
 pub fn blur_image(c: &BlurContext, src: &[u8], dst: &mut [u8]) {
+    println!("cycle-tracker-start: setup blur");
     let numpixels = src.len();
-    let mut temp = vec![0.0f32; numpixels];
+    let mut temp = vec![FixedU64::<U32>::from_num(0); numpixels];
     for i in 0..numpixels {
-        temp[i] = src[i] as f32;
+        temp[i] = FixedU64::<U32>::from_num(src[i]);
     }
+    println!("cycle-tracker-end: setup blur");
+    println!("cycle-tracker-start: horizontal");
     BlurContext::horiz_slice(c, &mut temp);
+    println!("cycle-tracker-end: horizontal");
+    println!("cycle-tracker-start: vertical");
     BlurContext::verti_slice(c, &mut temp);
+    println!("cycle-tracker-end: vertical");
+    println!("cycle-tracker-start: postscale");
     BlurContext::postscale(c, &mut temp, dst);
+    println!("cycle-tracker-end: postscale");
 }

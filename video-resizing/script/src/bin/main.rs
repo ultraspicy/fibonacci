@@ -1,27 +1,28 @@
-use lib::{load_image_from_file, ResizeContext};
+use lib::{load_image_from_file, BlurContext, ResizeContext};
 use sp1_sdk::{utils, ProverClient, SP1ProofWithPublicValues, SP1Stdin};
 
 /// The ELF we want to execute inside the zkVM.
 const ELF: &[u8] = include_bytes!("../../../elf/riscv32im-succinct-zkvm-elf");
 
 const _FRAME_NUM: usize = 10;
-const INPUT_WIDTH: i32 = 192;
-const INPUT_HEIGHT: i32 = 108;
-const OUTPUT_WIDTH: i32 = 48;
-const OUTPUT_HEIGHT: i32 = 27;
+const INPUT_WIDTH: i32 = 400;
+const INPUT_HEIGHT: i32 = 400;
+const OUTPUT_WIDTH: i32 = 400;
+const OUTPUT_HEIGHT: i32 = 400;
 
 fn main() {
     // Setup logging.
     utils::setup_logger();
 
     //fake example
-    let input_file = "../../resources/ffmpeg_original_frames_192_108/output_001_R.txt"; // "../../resources/ffmpeg_original_frames_192_108/output_001_R.txt";
-    let target_file = "../../resources/ffmpeg_resized_frames_48_27/output_001_R.txt"; //"../../resources/ffmpeg_resized_frames_48_27/output_001_R.txt";
-                                                                                      //let output_file = "image_output.txt";
+    let input_file = "../resources/large_img_channels/chebu_R.txt"; // "../../resources/ffmpeg_original_frames_192_108/output_001_R.txt";
+    let target_file = "../resources/blurred_img_channels/output_003_R.txt"; //"../../resources/ffmpeg_resized_frames_48_27/output_001_R.txt";
+                                                                            //let output_file = "image_output.txt";
 
+    // let context =
+    //     ResizeContext::new(INPUT_WIDTH, INPUT_HEIGHT, OUTPUT_WIDTH, OUTPUT_HEIGHT).unwrap();
     let context =
-        ResizeContext::new(INPUT_WIDTH, INPUT_HEIGHT, OUTPUT_WIDTH, OUTPUT_HEIGHT).unwrap();
-
+        BlurContext::new(10.0, 10.0, 1, INPUT_WIDTH as usize, INPUT_HEIGHT as usize).unwrap();
     // Get the Image
     let image: Vec<u8> = load_image_from_file(input_file);
     let target_image: Vec<u8> = load_image_from_file(target_file);

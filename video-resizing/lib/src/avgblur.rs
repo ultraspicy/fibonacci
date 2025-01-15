@@ -18,17 +18,12 @@ pub struct AvgBlurContext {
     // We limit to the case where width/height is the same for each color channel unlike ffmpeg.
     // All 3 are derived from the input image.
     pub area: i32,
-    pub width: usize,
-    pub height: usize,
+    pub width: i32,
+    pub height: i32,
 }
 
 impl AvgBlurContext {
-    pub fn new(
-        radius: i32,
-        radius_v: i32,
-        image_width: usize,
-        image_height: usize,
-    ) -> Option<Self> {
+    pub fn new(radius: i32, radius_v: i32, image_width: i32, image_height: i32) -> Option<Self> {
         let mut context = AvgBlurContext {
             radius,
             radius_v,
@@ -42,11 +37,11 @@ impl AvgBlurContext {
         Some(context)
     }
 
-    fn avgblur(c: &AvgBlurContext, src: &[u8], dst: &mut [u8]) {
+    pub fn avgblur(c: &AvgBlurContext, src: &[u8], dst: &mut [u8]) {
         // These are basically free, doing this to make analogy with ffmpeg easier
-        let (height, width) = (c.height as i32, c.width as i32);
+        let (height, width) = (c.height, c.width);
         let mut col_sum = vec![0i32; (width + (1024 * 2 + 1)) as usize];
-        let (linesize, dlinesize) = (c.width as i32, c.width as i32);
+        let (linesize, dlinesize) = (c.width, c.width);
         let mut sum = 0;
         let (size_w, size_h) = (c.radius, c.radius_v);
         let area = c.area;
