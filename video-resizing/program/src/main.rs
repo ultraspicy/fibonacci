@@ -32,7 +32,8 @@
 // inside the zkVM.
 
 #![no_main]
-use lib::{BlurContext, ResizeContext};
+use lib::blur_image;
+use lib::BlurContext;
 sp1_zkvm::entrypoint!(main);
 #[sp1_derive::cycle_tracker]
 
@@ -40,24 +41,25 @@ pub fn main() {
     println!("cycle-tracker-start: setup");
     // Behind the scenes, this compiles down to a system call which handles reading inputs
     // from the prover.
-    let c = sp1_zkvm::io::read::<BlurContext>();
     // let c = sp1_zkvm::io::read::<ResizeContext>();
+    let c = sp1_zkvm::io::read::<BlurContext>();
     // original image (in code u8 vector for RGB or YUV channel data) that
     // deserialized from each frame.
     let original_image: Vec<u8> = sp1_zkvm::io::read_vec();
     // ffmpeg output
     let target_image: Vec<u8> = sp1_zkvm::io::read_vec();
-
-    let mut tmp = vec![0u8; c.width as usize * c.height as usize];
+    // let mut tmp = vec![0u8; c.width as usize * c.height as usize];
     let mut dst = vec![0u8; c.width as usize * c.height as usize];
 
     // // hard code here
     // const FILTER_BITS: i32 = 14;
     // //const FILTER_SCALE: i32 = 1 << FILTER_BITS;
 
-    // // Horizontal scaling + Vertical scaling is a over-simplified version of ffmpeg bilinear
-    // // Horizontal scaling
-    // println!("cycle-tracker-end: setup");
+    // Horizontal scaling + Vertical scaling is a over-simplified version of ffmpeg bilinear
+    // Horizontal scaling
+    println!("cycle-tracker-end: setup");
+
+    blur_image(&c, &original_image, &mut dst);
     // println!("cycle-tracker-start: horizontal filter");
     // for y in 0..c.src_h as usize {
     //     for x in 0..c.dst_w as usize {
@@ -105,7 +107,7 @@ pub fn main() {
     //let mut difference: usize = 0;
     let limit = 100;
     let mut within_limit = true;
-    for i in 0..c.width as usize * c.hieght as usize {
+    for i in 0..c.width as usize * c.height as usize {
         let difference = (dst[i] as isize - target_image[i] as isize).unsigned_abs();
         if difference >= limit {
             within_limit = false;
