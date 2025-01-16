@@ -15,14 +15,14 @@ fn main() {
     utils::setup_logger();
 
     //fake example
-    let input_file = "../../resources/ffmpeg_original_frames_192_108/output_001_R.txt"; // "../../resources/ffmpeg_original_frames_192_108/output_001_R.txt";
-    let target_file = "../../resources/ffmpeg_resized_frames_48_27/output_001_R.txt"; //"../../resources/ffmpeg_resized_frames_48_27/output_001_R.txt";
-                                                                                      //let output_file = "image_output.txt";
+    let input_file = "../resources/large_img_channels/chebu_R.txt"; // "../../resources/ffmpeg_original_frames_192_108/output_001_R.txt";
+    let target_file = "../resources/blurred_img_channels/output_003_R.txt"; //"../../resources/ffmpeg_resized_frames_48_27/output_001_R.txt";
+                                                                            //let output_file = "image_output.txt";
 
-    let context = BlurContext::new(10f32, 10f32, 1, INPUT_WIDTH, INPUT_HEIGHT).unwrap();
     // let context =
-    // ResizeContext::new(INPUT_WIDTH, INPUT_HEIGHT, OUTPUT_WIDTH, OUTPUT_HEIGHT).unwrap();
-
+    //     ResizeContext::new(INPUT_WIDTH, INPUT_HEIGHT, OUTPUT_WIDTH, OUTPUT_HEIGHT).unwrap();
+    let context =
+        BlurContext::new(10.0, 10.0, 1, INPUT_WIDTH as usize, INPUT_HEIGHT as usize).unwrap();
     // Get the Image
     let image: Vec<u8> = load_image_from_file(input_file);
     let target_image: Vec<u8> = load_image_from_file(target_file);
