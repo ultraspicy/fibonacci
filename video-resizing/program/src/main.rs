@@ -33,6 +33,8 @@
 
 #![no_main]
 use lib::blur_image;
+use lib::freivalds_gblur::freivalds_verifier;
+use lib::u8_to_u64_vec;
 use lib::BlurContext;
 sp1_zkvm::entrypoint!(main);
 #[sp1_derive::cycle_tracker]
@@ -42,14 +44,24 @@ pub fn main() {
     // Behind the scenes, this compiles down to a system call which handles reading inputs
     // from the prover.
     // let c = sp1_zkvm::io::read::<ResizeContext>();
-    let c = sp1_zkvm::io::read::<BlurContext>();
+    // let c = sp1_zkvm::io::read::<BlurContext>();
     // original image (in code u8 vector for RGB or YUV channel data) that
     // deserialized from each frame.
     let original_image: Vec<u8> = sp1_zkvm::io::read_vec();
     // ffmpeg output
     let target_image: Vec<u8> = sp1_zkvm::io::read_vec();
+
+    println!("cycle-tracker-start: u64 pointer stuff");
+    let freivalds_randomness_bytes = sp1_zkvm::io::read_vec();
+    let freivalds_randomness = u8_to_u64_vec(freivalds_randomness_bytes);
+
+    let channel_t_c_bytes = sp1_zkvm::io::read_vec();
+    let channel_t_c: Vec<u64> = u8_to_u64_vec(channel_t_c_bytes);
+    println!("cycle-tracker-end: u64 pointer stuff");
+
+    let channel_blurred = sp1_zkvm::io::read_vec();
     // let mut tmp = vec![0u8; c.width as usize * c.height as usize];
-    let mut dst = vec![0u8; c.width as usize * c.height as usize];
+    let mut dst = channel_blurred;
 
     // // hard code here
     // const FILTER_BITS: i32 = 14;
@@ -59,7 +71,9 @@ pub fn main() {
     // Horizontal scaling
     println!("cycle-tracker-end: setup");
 
-    blur_image(&c, &original_image, &mut dst);
+    println!("cycle-tracker-start: verifier");
+    freivalds_verifier(freivalds_randomness, channel_t_c, &original_image, &dst);
+    println!("cycle-tracker-end: verifier");
     // println!("cycle-tracker-start: horizontal filter");
     // for y in 0..c.src_h as usize {
     //     for x in 0..c.dst_w as usize {
@@ -107,7 +121,7 @@ pub fn main() {
     //let mut difference: usize = 0;
     let limit = 100;
     let mut within_limit = true;
-    for i in 0..c.width as usize * c.height as usize {
+    for i in 0..dst.len() {
         let difference = (dst[i] as isize - target_image[i] as isize).unsigned_abs();
         if difference >= limit {
             within_limit = false;

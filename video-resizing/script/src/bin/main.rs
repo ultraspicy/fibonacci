@@ -1,4 +1,7 @@
-use lib::{load_image_from_file, BlurContext, ResizeContext};
+use lib::{
+    freivalds_gblur::freivalds_prover, freivalds_gblur::u64_to_u8_vec, load_image_from_file,
+    BlurContext, ResizeContext,
+};
 use sp1_sdk::{utils, ProverClient, SP1ProofWithPublicValues, SP1Stdin};
 
 /// The ELF we want to execute inside the zkVM.
@@ -21,19 +24,30 @@ fn main() {
 
     // let context =
     //     ResizeContext::new(INPUT_WIDTH, INPUT_HEIGHT, OUTPUT_WIDTH, OUTPUT_HEIGHT).unwrap();
-    let context =
-        BlurContext::new(10.0, 10.0, 1, INPUT_WIDTH as usize, INPUT_HEIGHT as usize).unwrap();
+    // let context =
+    // BlurContext::new(10.0, 10.0, 1, INPUT_WIDTH as usize, INPUT_HEIGHT as usize).unwrap();
     // Get the Image
+
     let image: Vec<u8> = load_image_from_file(input_file);
     let target_image: Vec<u8> = load_image_from_file(target_file);
+
+    use std::time::Instant;
+    let start = Instant::now();
+    let (freivalds_randomness, channel_t_c, channel_blurred) =
+        freivalds_prover(10, 30, INPUT_WIDTH as usize, INPUT_HEIGHT as usize, &image);
+    let duration = start.elapsed(); // Measure elapsed time
+    println!("Time elapsed: {:?}", duration); // Print
 
     // The input stream that the program will read from using `sp1_zkvm::io::read`.
     // Note that the types of the elements in the input stream must match the types being
     // read in the program.
     let mut stdin = SP1Stdin::new();
-    stdin.write(&context);
+    // stdin.write(&context);
     stdin.write_vec(image);
     stdin.write_vec(target_image);
+    stdin.write_vec(u64_to_u8_vec(&freivalds_randomness));
+    stdin.write_vec(u64_to_u8_vec(&channel_t_c));
+    stdin.write_vec(channel_blurred);
 
     // Create a `ProverClient` method.
     let client = ProverClient::new();
