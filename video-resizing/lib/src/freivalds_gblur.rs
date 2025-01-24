@@ -1,7 +1,6 @@
-use fixed::{traits::Fixed, types::extra::U32, FixedU64};
+use bytemuck::cast_slice;
+use ndarray::Array2;
 use rand::{thread_rng, Rng};
-use serde::{Deserialize, Serialize};
-use sprs::{linalg::ordering::start, CsMat, CsVec, TriMat};
 
 fn gaussian_kernel1d(sigma: i32, radius: usize) -> Vec<f64> {
     // Compute sigma squared as f64 for precision
@@ -23,103 +22,88 @@ fn gaussian_kernel1d(sigma: i32, radius: usize) -> Vec<f64> {
     kernel
 }
 
-fn gaussian_kernel1d_fixed_point(sigma: i32, radius: usize) -> Vec<u64> {
+fn gaussian_kernel1d_fixed_point(
+    sigma: i32,
+    radius: usize,
+    fractional_component: usize,
+) -> Vec<u64> {
     let floating_point_kernel = gaussian_kernel1d(sigma, radius);
     floating_point_kernel
         .iter()
-        .map(|x| ((x * 2f64.powf(32.0)) as u64))
+        .map(|x| ((x * 2f64.powf(fractional_component as f64)) as u64))
         .collect::<Vec<u64>>()
 }
 
-fn freivalds_matrix(kernel: Vec<u64>, height: usize, width: usize) -> CsMat<u64> {
-    let numpixels = height * width;
-    let mut matrix = TriMat::new((numpixels, numpixels));
+// Blurs a row or column depending on whether it is left or right multiplied.
+fn blur_matrix(kernel: &[u64], height: usize) -> Array2<u64> {
+    let mut matrix = Array2::<u64>::zeros((height, height));
     let radius = (kernel.len() - 1) / 2;
-    let one_side_sum = kernel[0..radius].iter().sum();
+    let one_side_sum: u64 = kernel[0..radius].iter().sum();
 
-    for pixel in 0..(numpixels as isize) {
-        let (row, col) = (pixel / (width as isize), pixel % (width as isize));
-        let mut start_idx = pixel - (radius as isize);
-        let row_start = row * (width as isize);
-        if row_start > start_idx {
-            start_idx = row_start;
-        }
-        let mut end_idx = pixel + (radius as isize);
-        let row_end = (row + 1) * (width as isize) - 1;
-        if row_end < end_idx {
-            end_idx = row_end;
-        }
+    for row in 0..height {
+        let filter_center = row;
+        // The contents of `kernel` will be "pasted" in between start_idx and end_idx.
+        // If the filter is too wide, remaining "mass" will be given to the start/end of the row.
+        // (this is done in some contexts in ffmpeg already)
+        let start_idx = if filter_center < radius {
+            0
+        } else {
+            filter_center - radius
+        };
+        let end_idx = if height - 1 < (filter_center + radius) {
+            height - 1
+        } else {
+            filter_center + radius
+        };
 
-        matrix.add_triplet(pixel as usize, pixel as usize, kernel[radius]);
+        matrix[[row, filter_center]] = kernel[radius];
 
         let mut remaining_left_mass = one_side_sum;
-        if start_idx == pixel {
-            let triplet_index = matrix.find_locations(pixel as usize, pixel as usize);
-            matrix.set_triplet(
-                triplet_index[0],
-                pixel as usize,
-                pixel as usize,
-                kernel[radius] + remaining_left_mass,
-            );
+        if start_idx == filter_center {
+            matrix[[row, filter_center]] += remaining_left_mass;
         } else {
-            let mut col_index = pixel - 1;
+            let mut col_index = filter_center - 1;
             let mut filter_index = radius - 1;
             while col_index > start_idx {
-                matrix.add_triplet(pixel as usize, col_index as usize, kernel[filter_index]);
+                matrix[[row, col_index]] = kernel[filter_index];
                 remaining_left_mass -= kernel[filter_index];
                 col_index -= 1;
                 filter_index -= 1;
             }
-            matrix.add_triplet(pixel as usize, col_index as usize, remaining_left_mass);
+            matrix[[row, col_index]] += remaining_left_mass;
         }
 
         let mut remaining_right_mass = one_side_sum;
-        if end_idx == pixel {
-            let triplet_index = matrix.find_locations(pixel as usize, pixel as usize);
-            matrix.set_triplet(
-                triplet_index[0],
-                pixel as usize,
-                pixel as usize,
-                kernel[radius] + remaining_right_mass,
-            );
+        if end_idx == filter_center {
+            matrix[[row, filter_center]] += remaining_right_mass;
         } else {
-            let mut col_index = pixel + 1;
+            let mut col_index = filter_center + 1;
             let mut filter_index = radius + 1;
             while col_index < end_idx {
-                matrix.add_triplet(pixel as usize, col_index as usize, kernel[filter_index]);
+                matrix[[row, col_index]] = kernel[filter_index];
                 remaining_right_mass -= kernel[filter_index];
                 col_index += 1;
                 filter_index += 1;
             }
-            matrix.add_triplet(pixel as usize, col_index as usize, remaining_right_mass);
+            matrix[[row, col_index]] += remaining_right_mass;
         }
     }
 
-    matrix.to_csr()
+    matrix
 }
 
-pub fn u64_to_u8_vec(input: &[u64]) -> Vec<u8> {
-    // Use unsafe to reinterpret the slice of u64 as a slice of u8
-    unsafe {
-        let ptr = input.as_ptr() as *const u8; // Pointer to the start of the u64 slice as u8
-        let len = input.len() * 8; // Each u64 is 8 bytes
-        std::slice::from_raw_parts(ptr, len).to_vec() // Create a Vec<u8> from the slice
-    }
+// TODO(sashafrolov): Redo this with bytemuck so we can do this faster.
+pub fn u64_to_u8_vec(vec: Vec<u64>) -> Vec<u8> {
+    // Safely reinterpret the slice of u64 as a slice of u8
+    cast_slice(&vec).to_vec()
 }
 
 pub fn u8_to_u64_vec(input: Vec<u8>) -> Vec<u64> {
-    // Ensure the input length is a multiple of 8
     assert!(
         input.len() % 8 == 0,
-        "Input Vec<u8> length must be a multiple of 8"
+        "Input Vec<u8> length must be a multiple of 8."
     );
-
-    // Perform the reinterpretation using unsafe
-    unsafe {
-        let ptr = input.as_ptr() as *const u64; // Reinterpret as a pointer to u64
-        let len = input.len() / 8; // Calculate the number of u64 elements
-        std::slice::from_raw_parts(ptr, len).to_vec() // Create a Vec<u64> from the slice
-    }
+    cast_slice(&input).to_vec()
 }
 
 pub fn freivalds_prover(
@@ -128,63 +112,118 @@ pub fn freivalds_prover(
     image_width: usize,
     image_height: usize,
     src: &[u8],
-) -> (Vec<u64>, Vec<u64>, Vec<u8>) {
-    let gaussian_kernel = gaussian_kernel1d_fixed_point(sigma, radius);
-    let freivalds_matrix = freivalds_matrix(gaussian_kernel, image_height, image_width);
+) -> (Vec<u64>, Vec<u64>, Vec<u64>, Vec<u64>, Vec<u64>) {
+    let gaussian_kernel = gaussian_kernel1d_fixed_point(sigma, radius, 24);
+    let freivalds_matrix_left = blur_matrix(&gaussian_kernel, image_height);
+    let freivalds_matrix_right = blur_matrix(&gaussian_kernel, image_width);
 
-    let src_vector = CsVec::new(
-        src.len(),
-        (0..src.len()).collect(),
-        src.into_iter().map(|x| *x as u64).collect(),
-    );
+    let src_u64: Vec<u64> = src.iter().map(|x| *x as u64).collect();
+    let src_matrix = Array2::from_shape_vec((image_height, image_width), src_u64).unwrap();
+    // Intermediate Results
+    let vertically_blurred_channel = freivalds_matrix_left.dot(&src_matrix);
+    let horizontally_blurred_channel = vertically_blurred_channel.dot(&freivalds_matrix_right);
+    // Final Result
+    let channel_blurred = horizontally_blurred_channel.flatten().to_vec();
 
-    let channel_blurred_sparse = &freivalds_matrix * &src_vector;
-    let channel_blurred = channel_blurred_sparse
-        .to_dense()
-        .to_vec()
-        .into_iter()
-        .map(|x| (x >> 32) as u8)
-        .collect();
     let mut rng = thread_rng();
-    let freivalds_randomness: Vec<u64> = (0..src.len()).map(|_| rng.gen()).collect();
-    let random_vector = CsVec::new(
-        freivalds_randomness.len(),
-        (0..freivalds_randomness.len()).collect(),
-        freivalds_randomness.clone(),
-    );
+    let freivalds_randomness_left: Vec<u64> = (0..image_height).map(|_| rng.gen()).collect();
+    let freivalds_randomness_left_ndarray =
+        Array2::from_shape_vec((1, image_height), freivalds_randomness_left.clone()).unwrap();
+    let freivalds_randomness_right: Vec<u64> = (0..image_width).map(|_| rng.gen()).collect();
+    let freivalds_randomness_right_ndarray =
+        Array2::from_shape_vec((image_width, 1), freivalds_randomness_right.clone()).unwrap();
 
-    let channel_t_c = &freivalds_matrix.transpose_into() * &random_vector;
+    let r_left_t_b = freivalds_randomness_left_ndarray.dot(&freivalds_matrix_left);
+    let b_r_right = freivalds_matrix_right.dot(&freivalds_randomness_right_ndarray);
     (
-        freivalds_randomness,
-        channel_t_c.to_dense().to_vec(),
+        freivalds_randomness_left,
+        freivalds_randomness_right,
+        r_left_t_b.flatten().to_vec(),
+        b_r_right.flatten().to_vec(),
         channel_blurred,
     )
 }
 
 pub fn freivalds_verifier(
-    freivalds_randomness: Vec<u64>,
-    channel_t_c: Vec<u64>,
+    freivalds_randomness_left: Vec<u64>,
+    freivalds_randomness_right: Vec<u64>,
+    r_left_t_b: Vec<u64>,
+    b_r_right: Vec<u64>,
     src: &[u8],
-    channel_blurred: &[u8],
+    channel_blurred: &[u64],
+    image_height: usize,
+    image_width: usize,
 ) {
-    if freivalds_randomness.len() != channel_blurred.len() {
-        panic!("Vector lengths are wrong");
+    println!("cycle-tracker-start: first asserts");
+    if freivalds_randomness_left.len() != image_height {
+        panic!("Left Freivald's randomness has incorrect length");
     }
-    if channel_t_c.len() != src.len() {
-        panic!("Vector lengths are wrong");
+    if freivalds_randomness_right.len() != image_width {
+        panic!("Right Freivald's randomness has incorrect length");
     }
-    let dot_product_1: u64 = freivalds_randomness
-        .iter()
-        .zip(channel_blurred.iter())
-        .map(|(x, y)| ((*x) * (*y as u64)))
-        .sum();
-    let dot_product_2: u64 = channel_t_c
-        .iter()
-        .zip(src.iter())
-        .map(|(x, y)| ((*x) * (*y as u64)))
-        .sum();
+    if r_left_t_b.len() != image_height {
+        panic!("Left partial matrix product has incorrect length");
+    }
+    if b_r_right.len() != image_width {
+        panic!("Right partial matrix product has incorrect length");
+    }
+    println!("cycle-tracker-end: first asserts");
 
-    if (dot_product_1 != dot_product_2) {
-        println!("Verification failed!");
+    println!("cycle-tracker-start: first loop");
+    // Inner product for non-blurred image
+    println!(
+        "Image width: {}, image height: {}",
+        image_width, image_height
+    );
+    // let goldilocks_prime: u128 = (1u128 << 64) - (1u128 << 32) + 1;
+    let mersenne31 = (1u64 << 31) - 1;
+    let mut r_left_t_b_channel: Vec<u64> = vec![0; image_width];
+    for i in 0..image_height {
+        for j in 0..image_width {
+            let old_val = r_left_t_b_channel[j];
+            let coeff = r_left_t_b[i];
+            let matrix_val = src[i * image_width + j] as u64;
+            r_left_t_b_channel[j] = (old_val + coeff * matrix_val);
+        }
     }
+    println!("cycle-tracker-end: first loop");
+
+    println!("cycle-tracker-start: first inner");
+    let mut inner_product_left = 0u64;
+    for i in 0..image_width {
+        let coeff = r_left_t_b_channel[i];
+        let randomness = b_r_right[i];
+        inner_product_left = (inner_product_left + (coeff * randomness));
+    }
+    println!("cycle-tracker-end: first inner");
+
+    println!("cycle-tracker-start: second loop");
+    // Inner product for blurred image
+    let mut r_left_r_blur_product: Vec<u64> = vec![0; image_width];
+    for i in 0..image_height {
+        for j in 0..image_width {
+            let old_val = r_left_r_blur_product[j];
+            let coeff = freivalds_randomness_left[i];
+            let matrix_val = channel_blurred[i * image_width + j];
+            r_left_r_blur_product[j] = (old_val + coeff * matrix_val);
+        }
+    }
+    println!("cycle-tracker-end: second loop");
+
+    println!("cycle-tracker-start: second inner");
+    let mut inner_product_right = 0u64;
+    for i in 0..image_width {
+        let coeff = r_left_r_blur_product[i];
+        let randomness = freivalds_randomness_right[i];
+        inner_product_right = (inner_product_right + (coeff * randomness));
+    }
+    println!("cycle-tracker-end: second inner");
+
+    if (inner_product_left as u64) != (inner_product_right as u64) {
+        println!("Freivalds verification failed");
+    }
+    println!(
+        "left: {}, right: {}",
+        inner_product_left, inner_product_right
+    )
 }

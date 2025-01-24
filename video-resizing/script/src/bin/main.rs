@@ -1,6 +1,6 @@
 use lib::{
-    freivalds_gblur::freivalds_prover, freivalds_gblur::u64_to_u8_vec, load_image_from_file,
-    BlurContext, ResizeContext,
+    freivalds_gblur::freivalds_prover, freivalds_gblur::freivalds_verifier,
+    freivalds_gblur::u64_to_u8_vec, load_image_from_file, BlurContext, ResizeContext,
 };
 use sp1_sdk::{utils, ProverClient, SP1ProofWithPublicValues, SP1Stdin};
 
@@ -33,10 +33,29 @@ fn main() {
 
     use std::time::Instant;
     let start = Instant::now();
-    let (freivalds_randomness, channel_t_c, channel_blurred) =
-        freivalds_prover(10, 30, INPUT_WIDTH as usize, INPUT_HEIGHT as usize, &image);
-    let duration = start.elapsed(); // Measure elapsed time
-    println!("Time elapsed: {:?}", duration); // Print
+    let (
+        freivalds_randomness_left,
+        freivalds_randomness_right,
+        r_left_t_b,
+        b_r_right,
+        channel_blurred,
+    ) = freivalds_prover(10, 30, INPUT_WIDTH as usize, INPUT_HEIGHT as usize, &image);
+    let duration = start.elapsed();
+    println!("Time elapsed: {:?}", duration);
+
+    // let start2 = Instant::now();
+    // freivalds_verifier(
+    //     freivalds_randomness_left,
+    //     freivalds_randomness_right,
+    //     r_left_t_b,
+    //     b_r_right,
+    //     &image,
+    //     &channel_blurred,
+    //     INPUT_HEIGHT as usize,
+    //     INPUT_WIDTH as usize,
+    // );
+    // let duration2 = start2.elapsed();
+    // println!("Time elapsed {:?}", duration2);
 
     // The input stream that the program will read from using `sp1_zkvm::io::read`.
     // Note that the types of the elements in the input stream must match the types being
@@ -45,9 +64,13 @@ fn main() {
     // stdin.write(&context);
     stdin.write_vec(image);
     stdin.write_vec(target_image);
-    stdin.write_vec(u64_to_u8_vec(&freivalds_randomness));
-    stdin.write_vec(u64_to_u8_vec(&channel_t_c));
-    stdin.write_vec(channel_blurred);
+    stdin.write_vec(u64_to_u8_vec(freivalds_randomness_left));
+    stdin.write_vec(u64_to_u8_vec(freivalds_randomness_right));
+    stdin.write_vec(u64_to_u8_vec(r_left_t_b));
+    stdin.write_vec(u64_to_u8_vec(b_r_right));
+    stdin.write_vec(u64_to_u8_vec(channel_blurred));
+    stdin.write(&(INPUT_HEIGHT as usize));
+    stdin.write(&(INPUT_WIDTH as usize));
 
     // Create a `ProverClient` method.
     let client = ProverClient::new();

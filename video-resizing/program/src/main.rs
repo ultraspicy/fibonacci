@@ -52,16 +52,26 @@ pub fn main() {
     let target_image: Vec<u8> = sp1_zkvm::io::read_vec();
 
     println!("cycle-tracker-start: u64 pointer stuff");
-    let freivalds_randomness_bytes = sp1_zkvm::io::read_vec();
-    let freivalds_randomness = u8_to_u64_vec(freivalds_randomness_bytes);
+    let freivalds_randomness_left_bytes = sp1_zkvm::io::read_vec();
+    let freivalds_randomness_left = u8_to_u64_vec(freivalds_randomness_left_bytes);
 
-    let channel_t_c_bytes = sp1_zkvm::io::read_vec();
-    let channel_t_c: Vec<u64> = u8_to_u64_vec(channel_t_c_bytes);
+    let freivalds_randomness_right_bytes = sp1_zkvm::io::read_vec();
+    let freivalds_randomness_right = u8_to_u64_vec(freivalds_randomness_right_bytes);
+
+    let r_left_t_b_bytes = sp1_zkvm::io::read_vec();
+    let r_left_t_b: Vec<u64> = u8_to_u64_vec(r_left_t_b_bytes);
+
+    let b_r_right_bytes = sp1_zkvm::io::read_vec();
+    let b_r_right: Vec<u64> = u8_to_u64_vec(b_r_right_bytes);
+
+    let channel_blurred_bytes = sp1_zkvm::io::read_vec();
+    let channel_blurred: Vec<u64> = u8_to_u64_vec(channel_blurred_bytes);
+
+    let image_height = sp1_zkvm::io::read::<usize>();
+    let image_width = sp1_zkvm::io::read::<usize>();
     println!("cycle-tracker-end: u64 pointer stuff");
 
-    let channel_blurred = sp1_zkvm::io::read_vec();
     // let mut tmp = vec![0u8; c.width as usize * c.height as usize];
-    let mut dst = channel_blurred;
 
     // // hard code here
     // const FILTER_BITS: i32 = 14;
@@ -72,7 +82,16 @@ pub fn main() {
     println!("cycle-tracker-end: setup");
 
     println!("cycle-tracker-start: verifier");
-    freivalds_verifier(freivalds_randomness, channel_t_c, &original_image, &dst);
+    freivalds_verifier(
+        freivalds_randomness_left,
+        freivalds_randomness_right,
+        r_left_t_b,
+        b_r_right,
+        &original_image,
+        &channel_blurred,
+        image_height,
+        image_width,
+    );
     println!("cycle-tracker-end: verifier");
     // println!("cycle-tracker-start: horizontal filter");
     // for y in 0..c.src_h as usize {
@@ -117,6 +136,10 @@ pub fn main() {
     // println!("cycle-tracker-end: vertical filter");
 
     println!("cycle-tracker-start: compute com");
+    let mut dst: Vec<u8> = channel_blurred
+        .into_iter()
+        .map(|x| (x >> 48) as u8)
+        .collect();
     //let mut difference: Vec<usize> = Vec::new();
     //let mut difference: usize = 0;
     let limit = 100;
