@@ -1,6 +1,6 @@
 import numpy as np
 
-FILTER_BITS = 14
+FILTER_BITS = 11
 FILTER_SCALE = 1 << FILTER_BITS
 
 def generate_horizontal_filter(src_w: int, dst_w: int) -> tuple[list[int], list[int]]:
