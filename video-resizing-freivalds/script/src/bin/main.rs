@@ -12,7 +12,7 @@ const ELF: &[u8] = include_elf!("fibonacci-program");
 // const INPUT_WIDTH: i32 = 240;
 // const INPUT_HEIGHT: i32 = 320;
 // const OUTPUT_WIDTH: i32 = 120; // Hardcoded value, will be overridden by config
-// const OUTPUT_HEIGHT: i32 = 180;
+// const OUTPUT_HEIGHT: i32 = 160;
 
 fn main() {
     // Setup logging.
@@ -29,11 +29,71 @@ fn main() {
     let target_prove_file = config["target_prove_file"].as_str().expect("Missing target_prove_file");
     let target_vk_file = config["target_vk_file"].as_str().expect("Missing target_vk_file");
 
+    // Reading the input image and target image
+    let image: Vec<u8> = load_image_from_file(input_file);
+    let target_image: Vec<u8> = load_image_from_file(target_file);
+
     // Build the full matrices
-    let h_matrix = lib::build_horizontal_matrix(INPUT_WIDTH, OUTPUT_WIDTH);
-    let v_matrix = lib::build_vertical_matrix(INPUT_HEIGHT, OUTPUT_HEIGHT);
-    // V @ R @ H
+    let h_matrix = lib::build_vertical_matrix(INPUT_HEIGHT, OUTPUT_HEIGHT);
+    let w_matrix = lib::build_horizontal_matrix(INPUT_WIDTH, OUTPUT_WIDTH);
     
+    /*Debugging*/
+    /*
+    let mut file = std::fs::File::create("h_matrix.txt").expect("Failed to create file");
+    for row in &h_matrix {
+        for &value in row {
+            writeln!(file, "{}", value).expect("Failed to write to file");
+        }
+    }
+    
+    let mut file = std::fs::File::create("w_matrix.txt").expect("Failed to create file");
+    for row in &w_matrix {
+        for &value in row {
+            writeln!(file, "{}", value).expect("Failed to write to file");
+        }
+    }
+    */
+
+    // Calculate the middle image: H @ R @ W
+    let mut target_middle_image: Vec<u32> = vec![0; target_image.len()];
+    let mut temp = vec![0u32; INPUT_HEIGHT as usize * OUTPUT_WIDTH as usize];
+    for i in 0..INPUT_HEIGHT as usize {
+        for j in 0..OUTPUT_WIDTH as usize {
+            let mut sum = 0u32;
+            for k in 0..INPUT_WIDTH as usize {
+                // println!("{} {} {}", i * INPUT_WIDTH as usize + k, k, j);
+                sum = sum + image[i * INPUT_WIDTH as usize + k] as u32 * w_matrix[k][j] as u32;
+            }
+            temp[i * OUTPUT_WIDTH as usize + j] = sum;
+        }
+    }
+
+    for i in 0..OUTPUT_HEIGHT as usize {
+        for j in 0..OUTPUT_WIDTH as usize {
+            let mut sum = 0u32;
+            for k in 0..INPUT_HEIGHT as usize {
+                sum = sum + temp[k * OUTPUT_WIDTH as usize + j] as u32 * h_matrix[i][k] as u32;
+            }
+            target_middle_image[i * OUTPUT_WIDTH as usize + j] = sum;
+        }
+    }
+
+    /*for debugging*/
+    /*
+    let mut file = std::fs::File::create("df.txt").expect("Failed to create file");
+    for i in 0..target_middle_image.len() {
+        let middle_val = target_middle_image[i]/(1<<22) as u32;
+        let target_val = target_image[i].clone() as u32;
+        let difference = if middle_val > target_val {
+            middle_val - target_val 
+        } else {
+            target_val - middle_val
+        };
+        writeln!(file, "{}", difference).expect("Failed to write to file");
+    }
+    */
+
+    /* For the proof generation */
     // Generate random values for Freivalds' algorithm
     let mut rng = rand::thread_rng();
     let babybear_prime: u64 = u64::pow(2, 32) - u64::pow(2, 16) + 1;
@@ -48,94 +108,23 @@ fn main() {
     for _ in 0..OUTPUT_WIDTH {
         freivalds_right.push(rng.gen_range(0..(babybear_prime as u32)));
     }
-    
+
     // Calculate r_left * H and W * r_right
-    let mut r_left_h = vec![0u32; v_matrix[0].len()];
+    let mut r_left_h = vec![0u32; INPUT_HEIGHT as usize];
     for i in 0..OUTPUT_HEIGHT as usize {
-        for j in 0..v_matrix[0].len() {
-            let product = (freivalds_left[i] as u32).wrapping_mul(v_matrix[i][j] as u32);
-            r_left_h[j] = ((r_left_h[j] as u32).wrapping_add(product) % babybear_prime as u32) as u32;
+        for j in 0..INPUT_HEIGHT as usize {
+            let product = (freivalds_left[i] as u32 * h_matrix[i][j] as u32);
+            r_left_h[j] = ((r_left_h[j] as u32 + product) % babybear_prime as u32) as u32;
         }
     }
-
-    let mut w_r_right = vec![0u32; h_matrix.len()];
-    for i in 0..h_matrix.len() {
+    let mut w_r_right = vec![0u32; INPUT_WIDTH as usize];
+    for i in 0..INPUT_WIDTH as usize {
         for j in 0..OUTPUT_WIDTH as usize {
-            let product = (h_matrix[i][j] as u32).wrapping_mul(freivalds_right[j] as u32);
-            w_r_right[i] = ((w_r_right[i] as u32).wrapping_add(product) % babybear_prime as u32) as u32;
+            let product = (w_matrix[i][j] as u32 * freivalds_right[j] as u32);
+            w_r_right[i] = ((w_r_right[i] as u32 + product) % babybear_prime as u32) as u32;
         }
     }
 
-    let image: Vec<u8> = load_image_from_file(input_file);
-    let target_image: Vec<u8> = load_image_from_file(target_file);
-    let mut target_middle_image: Vec<u32> = vec![0; target_image.len()];
-
-    println!("image: {:?}", image.len());
-    println!("INPUT_WIDTH: {:?}", INPUT_WIDTH);
-    println!("INPUT_HEIGHT: {:?}", INPUT_HEIGHT);
-    println!("target_image: {:?}", target_image.len());
-
-    // Calculate target_middle_image = v @ image @ h
-    // First multiply image with h matrix
-    let mut temp = vec![0u32; INPUT_HEIGHT as usize * OUTPUT_WIDTH as usize];
-    for i in 0..INPUT_HEIGHT as usize {
-        for j in 0..OUTPUT_WIDTH as usize {
-            let mut sum = 0u32;
-            for k in 0..INPUT_WIDTH as usize {
-                // println!("{} {} {}", i * INPUT_WIDTH as usize + k, k, j);
-                let product = ((image[i * INPUT_WIDTH as usize + k] as u64) * (h_matrix[k][j] as u64)) % (babybear_prime as u64);
-                sum = ((sum as u64 + product) % babybear_prime as u64) as u32;
-            }
-            temp[i * OUTPUT_WIDTH as usize + j] = sum;
-        }
-    }
-
-    // Then multiply v matrix with the result
-    for i in 0..OUTPUT_HEIGHT as usize {
-        for j in 0..OUTPUT_WIDTH as usize {
-            let mut sum = 0u32;
-            for k in 0..INPUT_HEIGHT as usize {
-                let product = ((temp[k * OUTPUT_WIDTH as usize + j] as u64) * (v_matrix[i][k] as u64)) % (babybear_prime as u64);
-                sum = ((sum as u64 + product) % (babybear_prime as u64)) as u32;
-            }
-            target_middle_image[i * OUTPUT_WIDTH as usize + j] = sum;
-        }
-    }
-    // Calculate freivalds_left @ target_image @ freivalds_right
-    // First multiply target_image (OUTPUT_HEIGHT x OUTPUT_WIDTH) with freivalds_right (OUTPUT_WIDTH x 1)
-    let mut temp = vec![0u32; OUTPUT_HEIGHT as usize];
-    for i in 0..OUTPUT_HEIGHT as usize {
-        for j in 0..OUTPUT_WIDTH as usize {
-            let product = (target_image[i * OUTPUT_WIDTH as usize + j] as u64)
-                .wrapping_mul(freivalds_right[j] as u64);
-            temp[i] = ((temp[i] as u64).wrapping_add(product) % babybear_prime as u64) as u32;
-        }
-    }
-
-    // Then multiply freivalds_left (1 x OUTPUT_HEIGHT) with the result (OUTPUT_HEIGHT x 1)
-    let mut sum = 0u32;
-    for i in 0..OUTPUT_HEIGHT as usize {
-        let product = (freivalds_left[i] as u64).wrapping_mul(temp[i] as u64);
-        sum = ((sum as u64).wrapping_add(product) % babybear_prime as u64) as u32;
-    }
-    println!("sum: {}",sum);
-    // The input stream that the program will read from using `sp1_zkvm::io::read`.
-    // Note that the types of the elements in the input stream must match the types being
-    // read in the program.
-    // Output differences between scaled target_middle_image and target_image
-
-    /*for debugging*/
-    // let mut file = std::fs::File::create("differences.txt").expect("Failed to create file");
-    // for i in 0..target_middle_image.len() {
-    //     let middle_val = target_middle_image[i]/(1<<22) as u32;
-    //     let target_val = target_image[i].clone() as u32;
-    //     let difference = if middle_val > target_val {
-    //         middle_val - target_val
-    //     } else {
-    //         target_val - middle_val
-    //     };
-    //     writeln!(file, "{}", difference).expect("Failed to write to file");
-    // }
     let mut stdin = SP1Stdin::new();
     stdin.write_vec(image);
     stdin.write_vec(target_image);
@@ -145,13 +134,6 @@ fn main() {
     stdin.write(&w_r_right);
     stdin.write(&freivalds_left);
     stdin.write(&freivalds_right);
-
-    // Save target_middle_image values divided by 2^22 to a file
-    let mut file = std::fs::File::create("target_middle_image.txt").expect("Failed to create file");
-    for value in target_middle_image.iter() {
-        let scaled_value = value / (1 << 22);
-        writeln!(file, "{}", scaled_value).expect("Failed to write to file");
-    }
 
     // Create a `ProverClient` method.
     let client = ProverClient::new();
@@ -168,6 +150,9 @@ fn main() {
 
     let within_limit: bool = proof.public_values.read::<bool>();
     println!("within_limit: {}", within_limit);
+
+    let cnt: u32 = proof.public_values.read::<u32>();
+    println!("exceed_limit_cnt: {}", cnt);
 
     // Verify proof and public values
     client.verify(&proof, &vk).expect("verification failed");
