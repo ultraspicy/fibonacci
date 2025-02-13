@@ -94,7 +94,7 @@ pub fn build_vertical_matrix(src_h: i32, dst_h: i32) -> Vec<Vec<i32>> {
     for y in 0..dst_h {
         let src_pos = v_pos[y as usize];
         for z in 0..filter_size {
-            if src_pos + z < src_h && src_pos + z > 0{
+            if src_pos + z < src_h && src_pos + z >= 0{
                 v[y as usize][(src_pos + z) as usize] = v_coeffs[(y * filter_size + z) as usize];
             }
         }

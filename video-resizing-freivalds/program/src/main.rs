@@ -44,9 +44,7 @@ pub fn main() {
     let mut tmp_freivalds = vec![0u32; r_size];
     let freivalds_s_size = freivalds_s.len();
     let freivalds_r_size = freivalds_r.len();
-    println!("freivalds_s_size: {}", freivalds_s_size);
-    println!("freivalds_r_size: {}", freivalds_r_size);
-    println!("middle_target_image len: {:?}", middle_target_image.len());
+
     for i in 0..freivalds_r_size {
         for j in 0..freivalds_s_size {
             tmp_freivalds[i] += (middle_target_image[i * freivalds_s_size + j] as u32) * freivalds_s[j];
@@ -66,10 +64,11 @@ pub fn main() {
     }
     
     /*
-    Prove 2: prove |target_image - middle_target_image| <= 100
+    Prove 2: prove |target_image - middle_target_image| <= 20
     */
-    let limit = 100;
+    let limit = 20;
     let mut within_limit = true;
+    let mut cnt = 0;
     for i in 0..middle_target_image.len() {
         let middle_val = middle_target_image[i]/(1<<22) as u32;
         let target_val = target_image[i] as u32;
@@ -80,10 +79,12 @@ pub fn main() {
         };
         if difference >= limit {
             within_limit = false;
+            cnt += 1;
             break;
         }
     }
     sp1_zkvm::io::commit(&within_limit);
+    sp1_zkvm::io::commit(&cnt);
     //sp1_zkvm::io::commit(&hash(&target_image));
     //print!("difference: {:?}", &difference);
     println!("cycle-tracker-start: commit");
