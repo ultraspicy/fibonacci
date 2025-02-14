@@ -955,6 +955,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "blake3"
+version = "1.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8ee0c1824c4dea5b5f81736aff91bae041d2c07ee1192bec91054e10e3e601e"
+dependencies = [
+ "arrayref",
+ "arrayvec",
+ "cc",
+ "cfg-if",
+ "constant_time_eq",
+ "serde",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1714,6 +1728,7 @@ name = "fibonacci-program"
 version = "0.1.0"
 dependencies = [
  "alloy-sol-types 0.7.7",
+ "blake3",
  "lib",
  "sp1-derive",
  "sp1-zkvm",
@@ -2275,6 +2290,25 @@ dependencies = [
  "number_prefix",
  "portable-atomic",
  "unicode-width",
+]
+
+[[package]]
+name = "init"
+version = "0.1.0"
+dependencies = [
+ "alloy-sol-types 0.7.7",
+ "clap",
+ "hex",
+ "lib",
+ "serde",
+ "serde_cbor",
+ "serde_json",
+ "sp1-build",
+ "sp1-derive",
+ "sp1-helper",
+ "sp1-sdk",
+ "sp1-zkvm",
+ "tracing",
 ]
 
 [[package]]
@@ -3933,6 +3967,7 @@ name = "script"
 version = "0.1.0"
 dependencies = [
  "alloy-sol-types 0.7.7",
+ "blake3",
  "clap",
  "hex",
  "lib",
@@ -5387,6 +5422,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "verifier"
+version = "0.1.0"
+dependencies = [
+ "alloy-sol-types 0.7.7",
+ "blake3",
+ "clap",
+ "hex",
+ "lib",
+ "serde",
+ "serde_cbor",
+ "serde_json",
+ "sp1-derive",
+ "sp1-sdk",
+ "sp1-zkvm",
+ "tracing",
 ]
 
 [[package]]

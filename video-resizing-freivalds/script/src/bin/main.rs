@@ -4,6 +4,7 @@ use sp1_sdk::include_elf;
 use rand::Rng;
 use clap::Parser;
 use std::io::Write;
+use blake3::{hash};
 
 /// The ELF we want to execute inside the zkVM.
 const ELF: &[u8] = include_elf!("fibonacci-program");
@@ -13,6 +14,7 @@ const ELF: &[u8] = include_elf!("fibonacci-program");
 // const INPUT_HEIGHT: i32 = 320;
 // const OUTPUT_WIDTH: i32 = 120; // Hardcoded value, will be overridden by config
 // const OUTPUT_HEIGHT: i32 = 160;
+const DEBUGGING: bool = false;
 
 fn main() {
     // Setup logging.
@@ -27,7 +29,7 @@ fn main() {
     let input_file = config["input_file"].as_str().expect("Missing input_file");
     let target_file = config["target_file"].as_str().expect("Missing target_file");
     let target_prove_file = config["target_prove_file"].as_str().expect("Missing target_prove_file");
-    let target_vk_file = config["target_vk_file"].as_str().expect("Missing target_vk_file");
+    let target_pk_file = config["target_pk_file"].as_str().expect("Missing target_pk_file");
 
     // Reading the input image and target image
     let image: Vec<u8> = load_image_from_file(input_file);
@@ -96,7 +98,7 @@ fn main() {
     /* For the proof generation */
     // Generate random values for Freivalds' algorithm
     let mut rng = rand::thread_rng();
-    let babybear_prime: u64 = u64::pow(2, 32) - u64::pow(2, 16) + 1;
+    let babybear_prime: u64 = 2013265921 as u64; //u64::pow(2, 31) - u64::pow(2, 27) + 1;
     
     let mut freivalds_left = Vec::<u32>::with_capacity(OUTPUT_HEIGHT as usize);
     let mut freivalds_right = Vec::<u32>::with_capacity(OUTPUT_WIDTH as usize);
@@ -114,14 +116,14 @@ fn main() {
     for i in 0..OUTPUT_HEIGHT as usize {
         for j in 0..INPUT_HEIGHT as usize {
             let product = (freivalds_left[i] as u32 * h_matrix[i][j] as u32);
-            r_left_h[j] = ((r_left_h[j] as u32 + product) % babybear_prime as u32) as u32;
+            r_left_h[j] = ((r_left_h[j] as u32 + product)) as u32;
         }
     }
     let mut w_r_right = vec![0u32; INPUT_WIDTH as usize];
     for i in 0..INPUT_WIDTH as usize {
         for j in 0..OUTPUT_WIDTH as usize {
             let product = (w_matrix[i][j] as u32 * freivalds_right[j] as u32);
-            w_r_right[i] = ((w_r_right[i] as u32 + product) % babybear_prime as u32) as u32;
+            w_r_right[i] = ((w_r_right[i] as u32 + product)) as u32;
         }
     }
 
@@ -136,44 +138,59 @@ fn main() {
     stdin.write(&freivalds_right);
 
     // Create a `ProverClient` method.
-    let client = ProverClient::new();
+    let client = ProverClient::from_env();
+    if (DEBUGGING == false) {
+        let pk = serde_cbor::from_slice(&std::fs::read(target_pk_file).expect("reading pk failed")).expect("deserializing pk failed");
+        let mut proof = client.prove(&pk, &stdin).run().unwrap();
 
-    // Generate the proof for the given program and input.
-    let (pk, vk) = client.setup(ELF);
-    println!("pk type: {}", std::any::type_name_of_val(&pk));
-    println!("vk type: {}", std::any::type_name_of_val(&vk));
-    let mut proof = client.prove(&pk, &stdin).run().unwrap();
+        proof
+            .save(target_prove_file)
+            .expect("saving proof failed");
+        
+        let equal_sum: bool = proof.public_values.read::<bool>();
+        println!("equal_sum: {}", equal_sum);
 
-    println!("generated proof");
-    let equal_sum: bool = proof.public_values.read::<bool>();
-    println!("equal_sum: {}", equal_sum);
+        let exceed_limit_20: u32 = proof.public_values.read::<u32>();
+        println!("exceed_limit_20: {}", exceed_limit_20);
 
-    let within_limit: bool = proof.public_values.read::<bool>();
-    println!("within_limit: {}", within_limit);
+        let exceed_limit_50: u32 = proof.public_values.read::<u32>();
+        println!("exceed_limit_50: {}", exceed_limit_50);
 
-    let cnt: u32 = proof.public_values.read::<u32>();
-    println!("exceed_limit_cnt: {}", cnt);
+        let hash_target_image = proof.public_values.read::<blake3::Hash>();
+        println!("hash_target_image: {:?}", hash_target_image);
+        println!("successfully generated proof for the program!");
 
-    // Verify proof and public values
-    client.verify(&proof, &vk).expect("verification failed");
+    } else {
+        let (pk, vk) = client.setup(ELF);
+        let mut proof = client.prove(&pk, &stdin).run().unwrap();
+        println!("generated proof");
+        let equal_sum: bool = proof.public_values.read::<bool>();
+        println!("equal_sum: {}", equal_sum);
 
-    // Test a round trip of proof serialization and deserialization.
-    proof
-        .save(target_prove_file)
-        .expect("saving proof failed");
-    
-    let deserialized_proof =
-        SP1ProofWithPublicValues::load(target_prove_file).expect("loading proof failed");
-    
-    let serialized_vk = serde_cbor::to_vec(&vk).expect("serializing vk failed");
-    std::fs::write(target_vk_file, serialized_vk).expect("saving serialized vk failed");
-    //vk.save(target_vk_file).expect("saving verifying key failed");
-    println!("Saved verifying key to {}", target_vk_file);
-    let deserialized_vk = serde_cbor::from_slice(&std::fs::read(target_vk_file).expect("reading vk failed")).expect("deserializing vk failed");
-    // let deserialized_vk = SP1VerifyingKey::load(target_vk_file).expect("loading verifying key failed");
-    client
-        .verify(&deserialized_proof, &deserialized_vk)
-        .expect("verification failed");
+        let exceed_limit_20: u32 = proof.public_values.read::<u32>();
+        println!("exceed_limit_20: {}", exceed_limit_20);
 
-    println!("successfully generated and verified proof for the program!");
+        let exceed_limit_50: u32 = proof.public_values.read::<u32>();
+        println!("exceed_limit_50: {}", exceed_limit_50);
+
+        let hash_target_image = proof.public_values.read::<blake3::Hash>();
+        println!("hash_target_image: {:?}", hash_target_image);
+
+            // Verify proof and public values
+        client.verify(&proof, &vk).expect("verification failed");
+
+        // Test a round trip of proof serialization and deserialization.
+        proof
+            .save(target_prove_file)
+            .expect("saving proof failed");
+        
+        let deserialized_proof =
+            SP1ProofWithPublicValues::load(target_prove_file).expect("loading proof failed");
+        
+        client
+            .verify(&deserialized_proof, &vk)
+            .expect("verification failed");
+
+        println!("successfully generated and verified proof for the program!");
+    }
 }
