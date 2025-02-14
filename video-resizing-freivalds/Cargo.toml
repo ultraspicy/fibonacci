@@ -3,6 +3,8 @@ members = [
     "lib",
     "program",
     "script",
+    "verifier",
+    "init",
 ]
 resolver = "2"
 

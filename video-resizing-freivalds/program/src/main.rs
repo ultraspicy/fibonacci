@@ -1,5 +1,6 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
+use blake3::hash;
 #[sp1_derive::cycle_tracker]
 
 pub fn main() {
@@ -66,9 +67,10 @@ pub fn main() {
     /*
     Prove 2: prove |target_image - middle_target_image| <= 20
     */
-    let limit = 20;
-    let mut within_limit = true;
-    let mut cnt = 0;
+    let limit1 = 20;
+    let limit2 = 50;
+    let mut cnt1 = 0;
+    let mut cnt2 = 0;
     for i in 0..middle_target_image.len() {
         let middle_val = middle_target_image[i]/(1<<22) as u32;
         let target_val = target_image[i] as u32;
@@ -77,14 +79,17 @@ pub fn main() {
         } else {
             target_val - middle_val
         };
-        if difference >= limit {
-            within_limit = false;
-            cnt += 1;
-            break;
+        if difference > limit1 {
+            cnt1 += 1;
+        }
+        if difference > limit2 {
+            cnt2 += 1;
         }
     }
-    sp1_zkvm::io::commit(&within_limit);
-    sp1_zkvm::io::commit(&cnt);
+    sp1_zkvm::io::commit(&cnt1);
+    sp1_zkvm::io::commit(&cnt2);
+    let hash = blake3::hash(&target_image);
+    sp1_zkvm::io::commit(&hash);
     //sp1_zkvm::io::commit(&hash(&target_image));
     //print!("difference: {:?}", &difference);
     println!("cycle-tracker-start: commit");
