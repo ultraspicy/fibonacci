@@ -3,6 +3,20 @@ pub use  freivalds_resize::*;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
+use bytemuck::cast_slice;
+
+pub fn u8_to_u32_vec(input: Vec<u8>) -> Vec<u32> {
+    assert!(
+        input.len() % 4 == 0,
+        "Input Vec<u4> length must be a multiple of 8."
+    );
+    cast_slice(&input).to_vec()
+}
+
+pub fn u32_to_u8_vec(vec: Vec<u32>) -> Vec<u8> {
+    // Safely reinterpret the slice of u64 as a slice of u8
+    cast_slice(&vec).to_vec()
+}
 
 
 pub fn load_image_from_file(input_file: &str) -> Vec<u8> {

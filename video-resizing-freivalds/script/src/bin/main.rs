@@ -1,4 +1,4 @@
-use lib::{load_image_from_file};
+use lib::{load_image_from_file, u32_to_u8_vec};
 use sp1_sdk::{utils, ProverClient, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey, SP1Proof};
 use sp1_sdk::include_elf;
 use rand::Rng;
@@ -137,11 +137,11 @@ fn main() {
     stdin.write_vec(image);
     stdin.write_vec(target_image);
 
-    stdin.write(&target_middle_image);
-    stdin.write(&r_left_h);
-    stdin.write(&w_r_right);
-    stdin.write(&freivalds_left);
-    stdin.write(&freivalds_right);
+    stdin.write_vec(u32_to_u8_vec(target_middle_image));
+    stdin.write_vec(u32_to_u8_vec(r_left_h));
+    stdin.write_vec(u32_to_u8_vec(w_r_right));
+    stdin.write_vec(u32_to_u8_vec(freivalds_left));
+    stdin.write_vec(u32_to_u8_vec(freivalds_right));
 
     // Create a `ProverClient` method.
     let client = ProverClient::from_env();

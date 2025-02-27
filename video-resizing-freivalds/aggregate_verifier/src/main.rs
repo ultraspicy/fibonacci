@@ -1,6 +1,5 @@
 use sp1_sdk::{utils, ProverClient, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey};
 use std::io::Write;
-use blake3::hash;
 
 // const _FRAME_NUM: usize = 10;
 // const INPUT_WIDTH: i32 = 240;

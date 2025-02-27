@@ -1,19 +1,29 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 use blake3::hash;
+use lib::u8_to_u32_vec;
 #[sp1_derive::cycle_tracker]
 
 pub fn main() {
     println!("cycle-tracker-start: setup");
     let original_image: Vec<u8> = sp1_zkvm::io::read_vec();
     let target_image: Vec<u8> = sp1_zkvm::io::read_vec();
-
-    let middle_target_image: Vec<u32> = sp1_zkvm::io::read::<Vec<u32>>();
-    let r = sp1_zkvm::io::read::<Vec<u32>>();
-    let s = sp1_zkvm::io::read::<Vec<u32>>();
-
-    let freivalds_r = sp1_zkvm::io::read::<Vec<u32>>();
-    let freivalds_s = sp1_zkvm::io::read::<Vec<u32>>();
+    
+    let middle_target_image_bytes = sp1_zkvm::io::read_vec();
+    let middle_target_image = u8_to_u32_vec(middle_target_image_bytes);
+    
+    let r_bytes = sp1_zkvm::io::read_vec();
+    let r = u8_to_u32_vec(r_bytes);
+    
+    let s_bytes = sp1_zkvm::io::read_vec();
+    let s = u8_to_u32_vec(s_bytes);
+    
+    let freivalds_r_bytes = sp1_zkvm::io::read_vec();
+    let freivalds_r = u8_to_u32_vec(freivalds_r_bytes);
+    
+    let freivalds_s_bytes = sp1_zkvm::io::read_vec();
+    let freivalds_s = u8_to_u32_vec(freivalds_s_bytes);
+    
 
     // let mut tmp = vec![0u8; c.width as usize * c.height as usize];
     
