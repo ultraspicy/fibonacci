@@ -1,13 +1,19 @@
-use lib::{generate_horizontal_filter, generate_vertical_filter, load_image_from_file};
-use sp1_sdk::{utils, ProverClient, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey};
+use lib::{load_image_from_file};
+use sp1_sdk::{utils, ProverClient, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey, SP1Proof};
 use sp1_sdk::include_elf;
 use rand::Rng;
-use clap::Parser;
-use std::io::Write;
 use blake3::{hash};
+use sp1_sdk::HashableKey;
 
 /// The ELF we want to execute inside the zkVM.
 const ELF: &[u8] = include_elf!("fibonacci-program");
+const AGGREGATION_ELF: &[u8] = include_elf!("aggregation-program");
+
+struct AggregationInput {
+    pub proof: SP1ProofWithPublicValues,
+    pub vk: SP1VerifyingKey,
+}
+
 
 // const _FRAME_NUM: usize = 10;
 // const INPUT_WIDTH: i32 = 240;
@@ -115,15 +121,15 @@ fn main() {
     let mut r_left_h = vec![0u32; INPUT_HEIGHT as usize];
     for i in 0..OUTPUT_HEIGHT as usize {
         for j in 0..INPUT_HEIGHT as usize {
-            let product = (freivalds_left[i] as u32 * h_matrix[i][j] as u32);
+            let product = freivalds_left[i] as u32 * h_matrix[i][j] as u32;
             r_left_h[j] = ((r_left_h[j] as u32 + product)) as u32;
         }
     }
     let mut w_r_right = vec![0u32; INPUT_WIDTH as usize];
     for i in 0..INPUT_WIDTH as usize {
         for j in 0..OUTPUT_WIDTH as usize {
-            let product = (w_matrix[i][j] as u32 * freivalds_right[j] as u32);
-            w_r_right[i] = ((w_r_right[i] as u32 + product)) as u32;
+            let product = w_matrix[i][j] as u32 * freivalds_right[j] as u32;
+            w_r_right[i] = (w_r_right[i] as u32 + product) as u32;
         }
     }
 
@@ -139,9 +145,9 @@ fn main() {
 
     // Create a `ProverClient` method.
     let client = ProverClient::from_env();
-    if (DEBUGGING == false) {
+    if DEBUGGING == false {
         let pk = serde_cbor::from_slice(&std::fs::read(target_pk_file).expect("reading pk failed")).expect("deserializing pk failed");
-        let mut proof = client.prove(&pk, &stdin).run().unwrap();
+        let mut proof = client.prove(&pk, &stdin).compressed().run().expect("proving failed");
 
         proof
             .save(target_prove_file)
@@ -156,41 +162,77 @@ fn main() {
         let exceed_limit_50: u32 = proof.public_values.read::<u32>();
         println!("exceed_limit_50: {}", exceed_limit_50);
 
-        let hash_target_image = proof.public_values.read::<blake3::Hash>();
-        println!("hash_target_image: {:?}", hash_target_image);
+        // let hash_target_image = proof.public_values.read::<blake3::Hash>();
+        // println!("hash_target_image: {:?}", hash_target_image);
         println!("successfully generated proof for the program!");
 
     } else {
         let (pk, vk) = client.setup(ELF);
-        let mut proof = client.prove(&pk, &stdin).run().unwrap();
+        let (aggregation_pk, aggregation_vk) = client.setup(AGGREGATION_ELF);
+        let proof = tracing::info_span!("generate Proof").in_scope(|| {
+            client.prove(&pk, &stdin).compressed().run().expect("proving failed")
+        });
         println!("generated proof");
-        let equal_sum: bool = proof.public_values.read::<bool>();
-        println!("equal_sum: {}", equal_sum);
 
-        let exceed_limit_20: u32 = proof.public_values.read::<u32>();
-        println!("exceed_limit_20: {}", exceed_limit_20);
+        let input_1 =  AggregationInput { proof: proof.clone(), vk: vk.clone() };
+        let inputs = vec![input_1];
 
-        let exceed_limit_50: u32 = proof.public_values.read::<u32>();
-        println!("exceed_limit_50: {}", exceed_limit_50);
-
-        let hash_target_image = proof.public_values.read::<blake3::Hash>();
-        println!("hash_target_image: {:?}", hash_target_image);
-
-            // Verify proof and public values
-        client.verify(&proof, &vk).expect("verification failed");
-
-        // Test a round trip of proof serialization and deserialization.
-        proof
+        tracing::info_span!("aggregate the proofs").in_scope(|| {
+            println!("Aggregate the Proofs");
+            let mut full_stdin = SP1Stdin::new();
+    
+            // Write the verification keys.
+            let vkeys = inputs.iter().map(|input| input.vk.hash_u32()).collect::<Vec<_>>();
+            full_stdin.write::<Vec<[u32; 8]>>(&vkeys);
+    
+            // Write the public values.
+            let public_values =
+                inputs.iter().map(|input| input.proof.public_values.to_vec()).collect::<Vec<_>>();
+            full_stdin.write::<Vec<Vec<u8>>>(&public_values);
+    
+            // Write the proofs.
+            //
+            // Note: this data will not actually be read by the aggregation program, instead it will be
+            // witnessed by the prover during the recursive aggregation process inside SP1 itself.
+            for input in inputs {
+                let SP1Proof::Compressed(proof) = input.proof.proof else { panic!() };
+                full_stdin.write_proof(*proof, input.vk.vk);
+            }
+    
+            // Generate the plonk bn254 proof.
+            let proof_final = client.prove(&aggregation_pk, &full_stdin).plonk().run().expect("proving failed");
+            proof_final
             .save(target_prove_file)
             .expect("saving proof failed");
-        
-        let deserialized_proof =
-            SP1ProofWithPublicValues::load(target_prove_file).expect("loading proof failed");
-        
-        client
-            .verify(&deserialized_proof, &vk)
-            .expect("verification failed");
+        });
 
-        println!("successfully generated and verified proof for the program!");
+        // let equal_sum: bool = proof.public_values.read::<bool>();
+        // println!("equal_sum: {}", equal_sum);
+
+        // let exceed_limit_20: u32 = proof.public_values.read::<u32>();
+        // println!("exceed_limit_20: {}", exceed_limit_20);
+
+        // let exceed_limit_50: u32 = proof.public_values.read::<u32>();
+        // println!("exceed_limit_50: {}", exceed_limit_50);
+
+        // let hash_target_image = proof.public_values.read::<blake3::Hash>();
+        // println!("hash_target_image: {:?}", hash_target_image);
+
+        //     // Verify proof and public values
+        // client.verify(&proof, &vk).expect("verification failed");
+
+        // // Test a round trip of proof serialization and deserialization.
+        // proof
+        //     .save(target_prove_file)
+        //     .expect("saving proof failed");
+        
+        // let deserialized_proof =
+        //     SP1ProofWithPublicValues::load(target_prove_file).expect("loading proof failed");
+        
+        // client
+        //     .verify(&deserialized_proof, &vk)
+        //     .expect("verification failed");
+
+        // println!("successfully generated and verified proof for the program!");
     }
 }

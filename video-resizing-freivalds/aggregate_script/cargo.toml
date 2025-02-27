@@ -1,7 +1,7 @@
 #![allow(warnings)]
 [package]
 version = "0.1.0"
-name = "script"
+name = "aggregate_script"
 edition = "2021"
 default-run = "main"
 

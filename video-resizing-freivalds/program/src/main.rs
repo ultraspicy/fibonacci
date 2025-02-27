@@ -88,10 +88,10 @@ pub fn main() {
     }
     sp1_zkvm::io::commit(&cnt1);
     sp1_zkvm::io::commit(&cnt2);
-    let hash = blake3::hash(&target_image);
-    sp1_zkvm::io::commit(&hash);
+
+    // let hash = blake3::hash(&target_image);
+    // sp1_zkvm::io::commit(&hash);
     //sp1_zkvm::io::commit(&hash(&target_image));
     //print!("difference: {:?}", &difference);
-    println!("cycle-tracker-start: commit");
     println!("cycle-tracker-end: commit");
 }

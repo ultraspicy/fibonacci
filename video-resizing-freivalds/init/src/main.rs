@@ -5,6 +5,7 @@ use clap::Parser;
 
 /// The ELF we want to execute inside the zkVM.
 const ELF: &[u8] = include_elf!("fibonacci-program");
+const AGGREGATION_ELF: &[u8] = include_elf!("aggregation-program");
 
 
 fn main() {
@@ -17,7 +18,6 @@ fn main() {
     let target_vk_file = config["target_vk_file"].as_str().expect("Missing target_vk_file");
     let target_pk_file = config["target_pk_file"].as_str().expect("Missing target_prove_file");
 
-    let client = ProverClient::from_env();
 
     let (pk, vk) = client.setup(ELF);
     
@@ -28,4 +28,29 @@ fn main() {
     std::fs::write(target_pk_file, serialized_pk).expect("saving serialized pk failed");
 
     println!("Successfully Save Pk and Vk");
+    
+    let target_aggregation_vk_file = config["target_aggregation_vk_file"]
+    .as_str()
+    .expect("Missing target_aggregation_vk_file");
+
+    let target_aggregation_pk_file = config["target_aggregation_pk_file"]
+        .as_str()
+        .expect("Missing target_aggregation_pk_file");
+
+    let (aggregation_pk, aggregation_vk) = client.setup(AGGREGATION_ELF);
+
+    let serialized_aggregation_vk = serde_cbor::to_vec(&aggregation_vk)
+        .expect("Serializing aggregation_vk failed");
+
+    std::fs::write(target_aggregation_vk_file, serialized_aggregation_vk)
+        .expect("Saving serialized aggregation_vk failed");
+
+    let serialized_aggregation_pk = serde_cbor::to_vec(&aggregation_pk)
+        .expect("Serializing aggregation_pk failed");
+
+    std::fs::write(target_aggregation_pk_file, serialized_aggregation_pk)
+        .expect("Saving serialized aggregation_pk failed");
+
+    println!("Successfully saved aggregation_pk and aggregation_vk");
+
 }

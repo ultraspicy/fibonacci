@@ -22,14 +22,14 @@ fn main() {
 
     client.verify(&proof, &vk).expect("verification failed");
 
-    let equal_sum: bool = proof.public_values.read::<bool>();
-    println!("equal_sum: {}", equal_sum);
+    // let equal_sum: bool = proof.public_values.read::<bool>();
+    // println!("equal_sum: {}", equal_sum);
 
-    let exceed_limit_20: u32 = proof.public_values.read::<u32>();
-    println!("exceed_limit_20: {}", exceed_limit_20);
+    // let exceed_limit_20: u32 = proof.public_values.read::<u32>();
+    // println!("exceed_limit_20: {}", exceed_limit_20);
 
-    let exceed_limit_50: u32 = proof.public_values.read::<u32>();
-    println!("exceed_limit_50: {}", exceed_limit_50);
+    // let exceed_limit_50: u32 = proof.public_values.read::<u32>();
+    // println!("exceed_limit_50: {}", exceed_limit_50);
 
     // let hash_target_image = proof.public_values.read::<blake3::Hash>();
     // println!("hash_target_image: {:?}", hash_target_image);
