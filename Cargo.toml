@@ -2,6 +2,8 @@
 members = [
   "video-resizing/script",
   "aggregation/script", "video-trimming", "video-signature-verification",
+  "inner-product-proof/program",
+  "inner-product-proof/script"
 ]
 resolver = "2"
 
