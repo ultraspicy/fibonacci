@@ -1,6 +1,0 @@
-cargo::rerun-if-changed=/Users/jianfeng/Developer/fibonacci/inner-product-proof/program/src
-cargo::rerun-if-changed=/Users/jianfeng/Developer/fibonacci/inner-product-proof/program/Cargo.toml
-cargo:rerun-if-changed=/Users/jianfeng/Developer/fibonacci/Cargo.lock
-cargo:warning=rustc +succinct --version: "rustc 1.82.0-dev\n"
-cargo:rustc-env=SP1_ELF_inner-product-proof=/Users/jianfeng/Developer/fibonacci/target/elf-compilation/riscv32im-succinct-zkvm-elf/release/inner-product-proof
-cargo:warning=inner-product-proof built at 2025-02-26 22:00:27
