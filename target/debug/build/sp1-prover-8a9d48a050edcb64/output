@@ -1,1 +1,0 @@
-cargo:rerun-if-env-changed=VK_MAP_SRC_PATH

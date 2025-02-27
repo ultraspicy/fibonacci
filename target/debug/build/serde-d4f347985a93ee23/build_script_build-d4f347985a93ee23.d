@@ -1,5 +1,0 @@
-/Users/jianfeng/Developer/fibonacci/target/debug/build/serde-d4f347985a93ee23/build_script_build-d4f347985a93ee23: /Users/jianfeng/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.218/build.rs
-
-/Users/jianfeng/Developer/fibonacci/target/debug/build/serde-d4f347985a93ee23/build_script_build-d4f347985a93ee23.d: /Users/jianfeng/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.218/build.rs
-
-/Users/jianfeng/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.218/build.rs:
