@@ -23,7 +23,6 @@ serde = { version = "1.0.210", default-features = false, features = ["derive", "
 clap = { version = "4.5.17", features = ["derive", "env"] }
 tracing = "0.1.40"
 hex = "0.4.3"
-alloy-sol-types = { workspace = true }
 lib = { path = "../lib" }
 sp1-derive = "2.0.0"
 
