@@ -1,19 +1,21 @@
 use rand::Rng;
 use sp1_sdk::{include_elf, utils, ProverClient, SP1ProofWithPublicValues, SP1Stdin};
 
-const ELF: &[u8] = include_elf!("inner-product-proof");
+const ELF: &[u8] = include_elf!("inner-product-precompile");
+
+
 
 fn main() {
     utils::setup_logger();
 
     let p: u32 = 0xFFF5001; // babybear
-    let vec_len = 4096;
+    let vec_len = 1024;
 
     let mut rng = rand::rng();
     let mut a: Vec<u32> = vec![vec_len];
-    a.extend((0..vec_len).map(|_| rng.gen_range(1..=255)));
+    a.extend((0..vec_len).map(|_| rng.gen_range(1..=3)));
     let mut b: Vec<u32> = vec![vec_len];
-    b.extend((0..vec_len).map(|_| rng.gen_range(1..=255)));
+    b.extend((0..vec_len).map(|_| rng.gen_range(1..=3)));
 
     let mut stdin = SP1Stdin::new();
     stdin.write(&a);
@@ -23,12 +25,13 @@ fn main() {
     // Create a `ProverClient` method.
     let client = ProverClient::from_env();
     // Execute the program using the `ProverClient.execute` method, without generating a proof.
+    // Start timing
     let start = std::time::Instant::now();
     let (_, report) = client.execute(ELF, &stdin).run().unwrap();
     let duration = start.elapsed();
     println!("Execution time: {} milliseconds", duration.as_micros());
     println!(
-        "inner-product-proof executed program with {} cycles",
+        "inner product precompile executed program with {} cycles",
         report.total_instruction_count()
     );
 }
