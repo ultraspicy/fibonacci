@@ -1,15 +1,15 @@
 [package]
-name = "inner-product-script"
+name = "inner-product-precompile-script"
 version = { workspace = true }
 edition = { workspace = true }
-default-run = "inner-product-script"
+default-run = "inner-product-precompile-script"
 publish = false
 
 [build-dependencies]
 sp1-build = { path = "./../../../sp1/crates/build" }
 
 [[bin]]
-name = "inner-product-script"
+name = "inner-product-precompile-script"
 path = "src/main.rs"
 
 [dependencies]
