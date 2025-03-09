@@ -1,2 +1,7 @@
 /resources
 /.vscode
+*.ipynb_checkpoints*
+/demo/frames/
+/demo/decomposed_frames/
+*__pycache__*
+/target
