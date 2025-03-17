@@ -1,5 +1,5 @@
 use ff_ext::GoldilocksExt2;
-use p3_field::PrimeCharacteristicRing;
+use p3_field_git::PrimeCharacteristicRing;
 
 use plonky2::field::extension::quadratic::QuadraticExtension;
 use plonky2::field::goldilocks_field::GoldilocksField;
