@@ -11,7 +11,7 @@ use multilinear_extensions::{
     mle::{DenseMultilinearExtension, MultilinearExtension},
     virtual_poly::ArcMultilinearExtension,
 };
-use p3_field::PrimeCharacteristicRing;
+use p3_field_git::PrimeCharacteristicRing;
 use rand::Rng;
 use std::time::Duration;
 use std::time::Instant;
@@ -22,7 +22,6 @@ type PcsGoldilocksRSCode = Basefold<GoldilocksExt2, BasefoldRSParams>;
 type PcsGoldilocksBasecode = Basefold<GoldilocksExt2, BasefoldBasecodeParams>;
 type T = BasicTranscript<GoldilocksExt2>;
 type E = GoldilocksExt2;
-// TODO: Experiment with RSCode
 type Pcs = PcsGoldilocksRSCode;
 
 fn main() {
