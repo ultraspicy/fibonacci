@@ -118,6 +118,7 @@ pub fn freivalds_prover(
     let freivalds_matrix_right = blur_matrix(&gaussian_kernel, image_width);
 
     let src_u64: Vec<u64> = src.iter().map(|x| *x as u64).collect();
+    println!("{}, {}", image_height, image_width);
     let src_matrix = Array2::from_shape_vec((image_height, image_width), src_u64).unwrap();
     // Intermediate Results
     let vertically_blurred_channel = freivalds_matrix_left.dot(&src_matrix);
