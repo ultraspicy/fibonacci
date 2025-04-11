@@ -10,8 +10,6 @@
 
 // In progress:
 // - Poseidon-based Merkle Tree (base case for SNARK-friendly signatures)
-// - Horner's Rule evaluation of the video at a certain point (rel)
-// - Evaluating MLE of a video at a certain point (approach for multilinear PC's to video)
 
 use blstrs::Scalar as Fr;
 use bytemuck::cast_slice;
@@ -21,6 +19,10 @@ use multilinear_extensions::{
     virtual_poly::ArcMultilinearExtension,
 };
 use neptune::poseidon::{HashMode, Poseidon, PoseidonConstants};
+// use p3_poseidon2::{Poseidon2, Poseidon2ExternalMatrixGeneral};
+// use p3_symmetric::{
+//     CryptographicHasher, PaddingFreeSponge, PseudoCompressionFunction, TruncatedPermutation,
+// };
 use pasta_curves::group::ff::FromUniformBytes;
 use pasta_curves::Fp;
 use plonky2::field::goldilocks_field::GoldilocksField;
@@ -35,25 +37,22 @@ static FRAME_SIZE: usize = 512 * 512;
 static FRAME_COUNT: usize = 3;
 static PIXELS: usize = FRAME_SIZE * FRAME_COUNT;
 
-pub fn hash_with_poseidon(data: Vec<u8>) -> Fp {
-    let constants = PoseidonConstants::new_with_strength(neptune::Strength::Standard);
-    let mut h = Poseidon::<Fp, U8>::new(&constants);
+// pub fn hash_with_poseidon(data: Vec<u8>) {
+//     type Perm = Poseidon2BabyBear<16>;
+//     type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
 
-    for chunk in data.chunks(32) {
-        let mut padded_chunk = [0u8; 32];
-        padded_chunk[..chunk.len()].copy_from_slice(chunk);
-        let words: [u64; 4] = padded_chunk
-            .chunks(8)
-            .map(|b| u64::from_le_bytes(b.try_into().unwrap()))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-        let scalar = Fp::from_raw(words);
-        h.input(scalar).unwrap();
-    }
+//     let perm = Perm::new_from_rng_128(&mut rng);
+//     let hash = MyHash::new(perm.clone());
 
-    h.hash_in_mode(HashMode::OptimizedStatic)
-}
+//     let mut data_as_felts: Vec<BabyBear> = data
+//         .chunks_exact(3)
+//         .map(|chunk| {
+//             BabyBear::from((chunk[0] as u32) | ((chunk[1] as u32) << 8) | ((chunk[2] as u32) << 16))
+//         })
+//         .collect();
+
+//     hash.hash_iter(data_as_felts)
+// }
 
 fn main() {
     let mut rng = rand::rng();
@@ -92,11 +91,11 @@ fn main() {
     // println!("Result from poseigon: {:?}", result1);
 
     // Barycentric Approach (with batching)
-    let start = Instant::now();
-    let result = barycentric_evaluation(image_copy, eval_point);
-    let duration = start.elapsed();
-    println!("Barycentric took: {:?}", duration);
-    println!("Result from Barycentric: {:?}", result);
+    // let start = Instant::now();
+    // let result = barycentric_evaluation(image_copy, eval_point);
+    // let duration = start.elapsed();
+    // println!("Barycentric took: {:?}", duration);
+    // println!("Result from Barycentric: {:?}", result);
 
     // let image_u64_copy = image.iter().map(|x| *x as u64).collect::<Vec<_>>();
     // let start = Instant::now();

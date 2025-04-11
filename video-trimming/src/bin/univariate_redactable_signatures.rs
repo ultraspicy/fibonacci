@@ -20,7 +20,7 @@ use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
 use p3_merkle_tree::FieldMerkleTreeMmcs;
 use p3_poseidon2::{Poseidon2, Poseidon2ExternalMatrixGeneral};
-use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
+use p3_symmetric::{CryptographicHasher, PaddingFreeSponge, TruncatedPermutation};
 use rand::distributions::{Distribution, Standard};
 use rand::{Rng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -181,12 +181,15 @@ fn main() {
     println!("verification result was: {:?}", result);
     println!("Values from commitment are: {:?}", values);
 
+    let frame_eval_start = Instant::now();
     // Correct approach
     let mut frame_eval = Challenge::zero();
     for i in frame_felts.iter().rev() {
         frame_eval *= zeta;
         frame_eval += *i;
     }
+    let frame_eval_duration = frame_eval_start.elapsed();
+    println!("frame eval took: {:?}", frame_eval_duration);
     println!("Frame eval is: {:?}", frame_eval);
     // To pad q,r to polynomials of degree 2^n, we multiply by a correct power of x.
     // This allows us to convert the range check for degrees of powers of 2 in FRI to one for arbitrary degrees.
