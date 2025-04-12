@@ -18,6 +18,7 @@ use p3_commit::{ExtensionMmcs, Pcs, PolynomialSpace};
 use p3_dft::Radix2DitParallel;
 use p3_dft::{NaiveDft, TwoAdicSubgroupDft};
 use p3_field::extension::BinomialExtensionField;
+use p3_field::PrimeField32;
 use p3_field::{AbstractField, ExtensionField, Field};
 use p3_fri::{FriConfig, TwoAdicFriPcs};
 use p3_matrix::dense::RowMajorMatrix;
@@ -29,6 +30,8 @@ use rand::distributions::{Distribution, Standard};
 use rand::{Rng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use rand::rngs::OsRng;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -183,6 +186,25 @@ fn main() -> io::Result<()> {
     let (comm, data) =
         <MyPcs as p3_commit::Pcs<Challenge, Challenger>>::commit(&pcs, vec![(d, evals)]);
     let commit_duration = setup_and_commit_start.elapsed();
+
+    // Now sign the commitment
+    // Convert each u32 to bytes
+    let mut comm_bytes = Vec::with_capacity(32); // 1 poseidon hash is about 32 bytes.
+    for felt in comm {
+        comm_bytes.extend((felt.as_canonical_u32()).to_le_bytes());
+    }
+
+    // Generate a new keypair
+    let mut seed = [0u8; 32];
+    OsRng.fill_bytes(&mut seed);
+
+    let signing_key = SigningKey::from_bytes(&seed);
+    let verifying_key = VerifyingKey::from(&signing_key);
+
+    // Sign the message using the keypair
+    let signature: Signature = signing_key.sign(&comm_bytes);
+
+    println!("Value of comm is: {:?}", comm);
     println!("Setup/Gen commitment took: {:?}", commit_duration);
 
     let opening_proof_start = Instant::now();
@@ -294,6 +316,10 @@ fn main() -> io::Result<()> {
 
     // TODO: Verifier recomputes r_domain, q_domain so we dot i's and cross T's in terms of eval times.
     let verification_start = Instant::now();
+    // Verify signature.
+    verifying_key
+        .verify(&comm_bytes, &signature)
+        .expect("Signature verification should succeed");
     let mut v_challenger = challenger.clone();
     let result = pcs
         .verify(
