@@ -18,23 +18,22 @@ use multilinear_extensions::{
     mle::{DenseMultilinearExtension, MultilinearExtension},
     virtual_poly::ArcMultilinearExtension,
 };
-use neptune::poseidon::{HashMode, Poseidon, PoseidonConstants};
-// use p3_poseidon2::{Poseidon2, Poseidon2ExternalMatrixGeneral};
-// use p3_symmetric::{
-//     CryptographicHasher, PaddingFreeSponge, PseudoCompressionFunction, TruncatedPermutation,
-// };
-use pasta_curves::group::ff::FromUniformBytes;
-use pasta_curves::Fp;
-use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::field::types::{Field, PrimeField64};
-use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
-use rand::Rng;
+use p3_baby_bear::{BabyBear, DiffusionMatrixBabyBear};
+use p3_poseidon2::{Poseidon2, Poseidon2ExternalMatrixGeneral};
+use p3_symmetric::{CryptographicHasher, PaddingFreeSponge, TruncatedPermutation};
+
 use std::time::Instant;
-use typenum::U8;
 use video_trimming::*;
 
-static FRAME_SIZE: usize = 512 * 512;
-static FRAME_COUNT: usize = 3;
+use rand::{Rng, RngCore, SeedableRng};
+use rand_chacha::ChaCha20Rng;
+
+type Perm = Poseidon2<Val, Poseidon2ExternalMatrixGeneral, DiffusionMatrixBabyBear, 16, 7>;
+type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
+type Val = BabyBear;
+
+static FRAME_SIZE: usize = 1920 * 1080;
+static FRAME_COUNT: usize = 240;
 static PIXELS: usize = FRAME_SIZE * FRAME_COUNT;
 
 // pub fn hash_with_poseidon(data: Vec<u8>) {
@@ -54,13 +53,16 @@ static PIXELS: usize = FRAME_SIZE * FRAME_COUNT;
 //     hash.hash_iter(data_as_felts)
 // }
 
+fn seeded_rng() -> impl Rng {
+    ChaCha20Rng::seed_from_u64(18)
+}
+
 fn main() {
-    let mut rng = rand::rng();
+    let mut rng = seeded_rng();
 
-    let image: Vec<u8> = (0..PIXELS).map(|_| rng.random()).collect();
-    let image_copy = image.clone();
+    let image: Vec<u8> = (0..PIXELS).map(|_| rng.next_u32() as u8).collect();
 
-    let eval_point = random_felt(rng.random());
+    let eval_point = random_felt(rng.next_u64(), rng.next_u64());
 
     // // IFFT Evaluation Approach
     // let start = Instant::now();
@@ -71,31 +73,41 @@ fn main() {
 
     // Merkle Tree approach (dumb)
     // let start = Instant::now();
-    // let result1 = image_merkle_tree(image, 32);
+    // let result1 = image_merkle_tree(image.clone(), 32);
     // let duration = start.elapsed();
     // println!("Merklization took: {:?}", duration);
-    // println!("Result from IFFT: {:?}", result1.root());
+    // println!("Result from Merklization: {:?}", result1.root());
 
     // Merkle Tree approach (smart)
     // let start = Instant::now();
-    // let result1 = image_merkle_tree(image, FRAME_SIZE);
+    // let result1 = image_merkle_tree(image.clone(), FRAME_SIZE);
     // let duration = start.elapsed();
     // println!("Merklization took: {:?}", duration);
-    // println!("Result from IFFT: {:?}", result1.root());
+    // println!("Result from Merklization: {:?}", result1.root());
 
-    // Poseidon hashing approach (not ready, annoying)
+    // Poseidon Approach (basically same perf as poseidon merkle tree)
+    // let perm = Perm::new_from_rng_128(
+    //     Poseidon2ExternalMatrixGeneral,
+    //     DiffusionMatrixBabyBear::default(),
+    //     &mut rng,
+    // );
+    // let hash = MyHash::new(perm.clone());
+    // let mut data_as_felts: Vec<BabyBear> = image
+    //     .clone()
+    //     .into_iter()
+    //     .map(|chunk| BabyBear::new((chunk as u32)))
+    //     .collect();
     // let start = Instant::now();
-    // let result1 = hash_with_poseidon(image);
+    // hash.hash_iter(data_as_felts);
     // let duration = start.elapsed();
-    // println!("Poseidon hash took: {:?}", duration);
-    // println!("Result from poseigon: {:?}", result1);
+    // println!("Poseidon Hashing took: {:?}", duration);
 
     // Barycentric Approach (with batching)
-    // let start = Instant::now();
-    // let result = barycentric_evaluation(image_copy, eval_point);
-    // let duration = start.elapsed();
-    // println!("Barycentric took: {:?}", duration);
-    // println!("Result from Barycentric: {:?}", result);
+    let start = Instant::now();
+    let result = barycentric_evaluation(image.clone(), eval_point);
+    let duration = start.elapsed();
+    println!("Barycentric took: {:?}", duration);
+    println!("Result from Barycentric: {:?}", result);
 
     // let image_u64_copy = image.iter().map(|x| *x as u64).collect::<Vec<_>>();
     // let start = Instant::now();
