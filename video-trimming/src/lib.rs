@@ -4,7 +4,6 @@ use p3_field_git::PrimeCharacteristicRing;
 use ark_std::log2;
 use p3_field::{extension::BinomialExtensionField, AbstractField, Field, TwoAdicField};
 use p3_goldilocks::Goldilocks;
-use plonky2::field::polynomial::{PolynomialCoeffs, PolynomialValues};
 use rayon::prelude::*;
 use rs_merkle::{algorithms::Sha256, Hasher, MerkleProof, MerkleTree};
 
