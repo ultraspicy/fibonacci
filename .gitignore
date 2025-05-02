@@ -10,7 +10,6 @@
 /video-trimming/temp_numbered_frames/
 /video-trimming/trimmed_decomposed_frames/
 /video-trimming/trimmed_frames/
-/target
 
 
 video-resizing-freivalds/init/config.json
@@ -30,3 +29,8 @@ video-trimming/verifier/config.json
 # Ignore all .mp4 files in any directory
 **/*.mp4
 
+# Ignore all .bin files in any directory
+**/*.bin
+
+demo/test_pk.bin
+demo/test_vk.bin
