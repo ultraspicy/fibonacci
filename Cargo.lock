@@ -456,6 +456,7 @@ checksum = "1f3a13b34da09176a8baba701233fdffbaa7c1b1192ce031a3da4e55ce1f1a56"
 dependencies = [
  "ark-ec 0.4.2",
  "ark-ff 0.4.2",
+ "ark-r1cs-std",
  "ark-relations 0.4.0",
  "ark-serialize 0.4.2",
  "ark-snark 0.4.0",
@@ -464,6 +465,7 @@ dependencies = [
  "derivative",
  "digest 0.10.7",
  "sha2",
+ "tracing",
 ]
 
 [[package]]
@@ -1588,7 +1590,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7987,6 +7989,7 @@ version = "1.1.0"
 dependencies = [
  "ark-bls12-381 0.4.0",
  "ark-cp-groth16",
+ "ark-crypto-primitives 0.4.0",
  "ark-ec 0.4.2",
  "ark-ff 0.4.2",
  "ark-groth16",
@@ -7996,6 +7999,7 @@ dependencies = [
  "ark-serialize 0.4.2",
  "ark-std 0.4.0",
  "jemallocator",
+ "rand",
  "rayon",
  "sha2",
 ]
