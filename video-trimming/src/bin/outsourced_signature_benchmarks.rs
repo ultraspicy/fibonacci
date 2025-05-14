@@ -1,15 +1,13 @@
 // This file benchmarks the work the a signer would need to do to validate an outsourced signature.
-// In our setup, these are the different steps a camera would be doing.
+// In our setup, these are the different options for steps a camera would be doing.
 // We don't include the time to sign a value, we just include the time to hash/or validate that a
 // PCS is correctly produced.
 // We benchmark the following approaches:
-// - Merkle Hashing with SHA-256 (base case for redactable signatures)
-// - Merkle Hashing with SHA-256, leaves are frames (more reasonable base case since we only reveal a frame at a time)
-// - IFFT-based evaluation (naive way of evaluating video's polynomial at a given point. Note that these don't obviously lead to a redactable signature scheme.)
 // - Barycentric Evaluation of the video at a random point (Clever way of evaluating video's polynomial at a given point)
-
-// In progress:
-// - Poseidon-based Merkle Tree (base case for SNARK-friendly signatures)
+// - Multilinear extension of the video (default way of doing this for a multilinear PCS, not super memory friendly)
+// - "Horners rule" evaluation (our more optimized univariate implementation)
+// - Plonky3 Poseidon-based Merkle Tree
+// - IFFT approach (dumb nlogn/linear memory cost way of doing univariate interpolation)
 
 use blstrs::Scalar as Fr;
 use bytemuck::cast_slice;
