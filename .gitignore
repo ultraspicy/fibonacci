@@ -34,3 +34,5 @@ video-trimming/verifier/config.json
 
 demo/test_pk.bin
 demo/test_vk.bin
+
+Cargo.lock
