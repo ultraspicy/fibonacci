@@ -1,3 +1,8 @@
+change-id = 129295
+
+[llvm]
+download-ci-llvm = true
+
 [workspace]
 members = [
   "video-resizing/script",
