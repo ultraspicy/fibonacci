@@ -31,4 +31,18 @@ fn main() {
         "inner-product-proof executed program with {} cycles",
         report.total_instruction_count()
     );
+
+    
+    // Generate the proof for the given program and input 
+    let (pk, vk) = client.setup(ELF);
+    let mut proof = client.prove(&pk, &stdin).compressed().run().unwrap();
+
+    println!("generated proof");
+
+    let inner_product = proof.public_values.read::<u32>();
+
+    println!{"inner product: {}", inner_product};
+
+    client.verify(&proof, &vk).expect("verification failed");
+
 }
