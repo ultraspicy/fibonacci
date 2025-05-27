@@ -1,5 +1,6 @@
 use ff_ext::GoldilocksExt2;
 use p3_field_git::PrimeCharacteristicRing;
+use p3_goldilocks_git::Goldilocks as CenoGoldilocks;
 
 use ark_std::log2;
 use p3_field::{extension::BinomialExtensionField, AbstractField, Field, TwoAdicField};
@@ -64,26 +65,6 @@ pub fn horners_evaluation(mut image: Vec<u8>, eval_point: EF) -> EF {
     sum
 }
 
-// Leftover from experiment to show that Barycentric with montgomery is better than IFFT
-// pub fn perform_ifft(mut unpadded_evals: Vec<u8>) -> PolynomialCoeffs<F> {
-//     let degree = unpadded_evals.len().next_power_of_two();
-//     while unpadded_evals.len() < degree {
-//         unpadded_evals.push(0_u8);
-//     }
-//     let vals = PolynomialValues::from(
-//         unpadded_evals
-//             .iter()
-//             .map(|n| F::from_canonical_u8(*n))
-//             .collect::<Vec<F>>(),
-//     );
-//     vals.ifft()
-// }
-
-// pub fn ifft_evaluation(mut image: Vec<u8>, eval_point: F) -> F {
-//     let ifft = perform_ifft(image);
-//     ifft.eval(eval_point)
-// }
-
 pub fn random_felt(x1: u64, x2: u64) -> EF {
     EF::new(
         Goldilocks::from_canonical_u64(x1),
@@ -111,7 +92,7 @@ pub fn compute_video_mle_evaluations_vec(
     pixels: &[u64],
     frame_size: usize,
     num_frames: usize,
-) -> Vec<E> {
+) -> Vec<CenoGoldilocks> {
     assert!(
         frame_size * num_frames == pixels.len(),
         "Pixels is of an unexpected size!"
@@ -125,11 +106,19 @@ pub fn compute_video_mle_evaluations_vec(
     for i in 0..num_frames.next_power_of_two() {
         for j in 0..frame_size.next_power_of_two() {
             if i < num_frames && j < frame_size {
-                evaluations.push(E::from_u64(pixels[i * frame_size + j]));
+                evaluations.push(CenoGoldilocks::from_u64(pixels[i * frame_size + j]));
             } else {
-                evaluations.push(E::from_u64(0));
+                evaluations.push(CenoGoldilocks::from_u64(0));
             }
         }
     }
     evaluations
+}
+
+pub fn to_binary_vec(frame_num: usize, n: usize) -> Vec<u64> {
+    (0..n)
+        .rev()
+        .map(|i| (frame_num >> i) & 1)
+        .map(|bit| bit as u64)
+        .collect()
 }

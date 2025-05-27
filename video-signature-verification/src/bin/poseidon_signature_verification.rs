@@ -22,7 +22,7 @@ use ark_std::rand::{RngCore, SeedableRng};
 use ark_std::test_rng;
 use ark_std::time::{SystemTime, UNIX_EPOCH};
 
-const LENGTH: usize = 1 << 15;
+const LENGTH: usize = 1 << 16;
 
 /// Generate default parameters (bls381-fr-only) for alpha = 17, state-size = 8
 pub fn poseidon_parameters_for_test<F: PrimeField>() -> PoseidonConfig<F> {
