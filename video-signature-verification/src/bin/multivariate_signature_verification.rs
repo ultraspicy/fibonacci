@@ -27,7 +27,7 @@ use rand::SeedableRng;
 use sha2::{Digest, Sha256};
 use std::any::type_name;
 
-const MESSAGE_LENGTH: usize = 1 << 15;
+const MESSAGE_LENGTH: usize = 1 << 16;
 
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;

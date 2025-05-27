@@ -1,7 +1,9 @@
 [package]
 name = "video-trimming"
-version.workspace = true
-edition.workspace = true
+version = "1.1.0"
+edition = "2021"
+
+[workspace]
 
 [dependencies]
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
@@ -39,11 +41,14 @@ p3-symmetric = "0.2.0"
 p3-util = "0.2.0"
 rand_chacha = "0.3.1"
 # rand_core = "0.9.0"
-p3-field-git = { git = "https://github.com/scroll-tech/plonky3", rev = "8d2be81", package = "p3-field" }
-mpcs = { git = "https://github.com/scroll-tech/ceno", subdirectory = "mpcs" }
-transcript = { git = "https://github.com/scroll-tech/ceno", subdirectory = "transcript" }
-ff_ext = { git = "https://github.com/scroll-tech/ceno", subdirectory = "ff_ext" }
-multilinear_extensions = { git = "https://github.com/scroll-tech/ceno", subdirectory = "multilinear_extensions" }
+p3-field-git = { git = "https://github.com/scroll-tech/plonky3", rev = "20c3cb9", package = "p3-field" }
+p3-goldilocks-git = { git = "https://github.com/scroll-tech/plonky3", rev = "20c3cb9", package = "p3-goldilocks" }
+p3-matrix-git = { git = "https://github.com/scroll-tech/plonky3", rev = "20c3cb9", package = "p3-matrix" }
+mpcs = { git = "https://github.com/scroll-tech/ceno", rev = "82b5b04", subdirectory = "mpcs" }
+transcript = { git = "https://github.com/scroll-tech/ceno", rev = "82b5b04", subdirectory = "transcript" }
+ff_ext = { git = "https://github.com/scroll-tech/ceno", rev = "82b5b04", subdirectory = "ff_ext" }
+multilinear_extensions = { git = "https://github.com/scroll-tech/ceno", rev = "82b5b04", subdirectory = "multilinear_extensions" }
+witness = { git = "https://github.com/scroll-tech/ceno", rev = "82b5b04", subdirectory = "witness" }
 ark-bls12-381 = { version = "0.5.0", default-features = false, features = [ "curve" ] }
 ark-bls12-377 = { version = "0.5.0", default-features = false, features = [ "curve" ] }
 ark-crypto-primitives = { version = "0.5.0", default-features = false }
