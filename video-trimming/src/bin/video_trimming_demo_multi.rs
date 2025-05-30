@@ -8,7 +8,7 @@ use ark_std::log2;
 use itertools::{izip, Itertools};
 use multilinear_extensions::mle::ArcMultilinearExtension;
 use p3_matrix_git::dense::RowMajorMatrix as P3RowMajorMatrix;
-use rand::distributions::{Distribution, Standard};
+// use rand::distributions::{Distribution, Standard};
 use rand::{Rng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use witness::{InstancePaddingStrategy, RowMajorMatrix};
