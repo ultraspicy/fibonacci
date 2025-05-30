@@ -26,12 +26,13 @@ use p3_matrix::Matrix;
 use p3_merkle_tree::FieldMerkleTreeMmcs;
 use p3_poseidon2::{Poseidon2, Poseidon2ExternalMatrixGeneral};
 use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
-use rand::distributions::{Distribution, Standard};
-use rand::{Rng, RngCore, SeedableRng};
-use rand_chacha::ChaCha20Rng;
+// use rand::{Rng, RngCore, SeedableRng};
+// use rand_chacha::ChaCha20Rng;
+use ark_std::rand::rngs::StdRng;
+use ark_std::rand::{Rng, RngCore, SeedableRng};
 
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
-use rand::rngs::OsRng;
+use rand::{rngs::OsRng, TryRngCore};
 use std::time::Duration;
 use std::time::Instant;
 
@@ -79,7 +80,7 @@ fn read_file_as_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
 }
 
 fn seeded_rng() -> impl Rng {
-    ChaCha20Rng::seed_from_u64(18)
+    StdRng::seed_from_u64(18)
 }
 
 fn main() -> io::Result<()> {
@@ -196,7 +197,7 @@ fn main() -> io::Result<()> {
 
     // Generate a new keypair
     let mut seed = [0u8; 32];
-    OsRng.fill_bytes(&mut seed);
+    OsRng.try_fill_bytes(&mut seed).unwrap();
 
     let signing_key = SigningKey::from_bytes(&seed);
     let verifying_key = VerifyingKey::from(&signing_key);

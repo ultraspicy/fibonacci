@@ -22,8 +22,10 @@ use witness::{InstancePaddingStrategy, RowMajorMatrix};
 use std::time::Instant;
 use video_trimming::*;
 
-use rand::{Rng, RngCore, SeedableRng};
-use rand_chacha::ChaCha20Rng;
+// use rand::{Rng, RngCore, SeedableRng};
+use ark_std::rand::{Rng, RngCore, SeedableRng};
+// use rand_chacha::ChaCha20Rng;
+use ark_std::rand::rngs::StdRng; // or keep ChaCha20Rng if preferred
 use serde::Serialize;
 
 type Perm = Poseidon2<Val, Poseidon2ExternalMatrixGeneral, DiffusionMatrixBabyBear, 16, 7>;
@@ -31,7 +33,7 @@ type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
 type Val = BabyBear;
 
 fn seeded_rng() -> impl Rng {
-    ChaCha20Rng::seed_from_u64(18)
+    StdRng::seed_from_u64(18)
 }
 
 #[derive(Serialize)]
