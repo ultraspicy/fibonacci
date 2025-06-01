@@ -8,14 +8,14 @@ const ELF: &[u8] = include_elf!("inner-product-precompile");
 fn main() {
     utils::setup_logger();
 
-    let p: u32 = 0xFFF5001; // babybear
-    let vec_len = 1024;
+    let p: u32 = 0xFFF5001;
+    let vec_len = 8;
 
-    let mut rng = rand::rng();
+    let mut rng = rand::thread_rng(); 
     let mut a: Vec<u32> = vec![vec_len];
-    a.extend((0..vec_len).map(|_| rng.gen_range(1..=3)));
+    a.extend((0..vec_len).map(|_| rng.gen_range(1..=1)));
     let mut b: Vec<u32> = vec![vec_len];
-    b.extend((0..vec_len).map(|_| rng.gen_range(1..=3)));
+    b.extend((0..vec_len).map(|_| rng.gen_range(1..=1)));
 
     let mut stdin = SP1Stdin::new();
     stdin.write(&a);
@@ -34,4 +34,17 @@ fn main() {
         "inner product precompile executed program with {} cycles",
         report.total_instruction_count()
     );
+    
+    // Generate the proof for the given program and input 
+    let (pk, vk) = client.setup(ELF);
+    let mut proof = client.prove(&pk, &stdin).run().unwrap();
+
+    println!("generated proof");
+
+    let inner_product = proof.public_values.read::<u32>();
+
+    println!{"inner product: {}", inner_product};
+
+    client.verify(&proof, &vk).expect("verification failed");
+    println!{"verification succeed!"};
 }
