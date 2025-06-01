@@ -22,8 +22,6 @@ pub fn main() {
     }
     println!("cycle-tracker-end: compute");
 
-
-
     // Get result from a_with_len[0] and apply modulo p
     let inner_product = a_with_len[0] % p;
 

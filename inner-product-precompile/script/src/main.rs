@@ -9,7 +9,7 @@ fn main() {
     utils::setup_logger();
 
     let p: u32 = 0xFFF5001;
-    let vec_len = 8;
+    let vec_len = 350;
 
     let mut rng = rand::thread_rng(); 
     let mut a: Vec<u32> = vec![vec_len];
