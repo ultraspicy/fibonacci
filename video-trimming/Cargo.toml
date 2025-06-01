@@ -12,6 +12,7 @@ clap = { version = "4.0", features = ["derive", "env"] }
 tracing = "0.1.40"
 hex = "0.4.3"
 rand = "0.9.1"
+either = { version = "1.15.*", features = ["serde"] }
 bytemuck = "1.21.0"
 blstrs = "0.7.1"
 neptune = "13.0.0"
@@ -48,6 +49,7 @@ mpcs = { git = "https://github.com/scroll-tech/ceno", rev = "82b5b04", subdirect
 transcript = { git = "https://github.com/scroll-tech/ceno", rev = "82b5b04", subdirectory = "transcript" }
 ff_ext = { git = "https://github.com/scroll-tech/ceno", rev = "82b5b04", subdirectory = "ff_ext" }
 multilinear_extensions = { git = "https://github.com/scroll-tech/ceno", rev = "82b5b04", subdirectory = "multilinear_extensions" }
+sumcheck = { git = "https://github.com/scroll-tech/ceno", rev = "82b5b04", subdirectory = "sumcheck" }
 witness = { git = "https://github.com/scroll-tech/ceno", rev = "82b5b04", subdirectory = "witness" }
 ark-bls12-381 = { version = "0.5.0", default-features = false, features = [ "curve" ] }
 ark-bls12-377 = { version = "0.5.0", default-features = false, features = [ "curve" ] }
