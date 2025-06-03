@@ -8,7 +8,7 @@ use std::io::Write;
 use std::time::Instant;
 
 /// The ELF we want to execute inside the zkVM.
-const ELF: &[u8] = include_elf!("freivalds-precompile");
+const ELF: &[u8] = include_elf!("fibonacci-program");
 
 // const _FRAME_NUM: usize = 10;
 // const INPUT_WIDTH: i32 = 240;

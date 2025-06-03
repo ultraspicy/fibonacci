@@ -32,77 +32,30 @@ pub fn main() {
     // First multiply original_image (r_size x s_size) with s (s_size x 1)
     let mut temp = vec![0u32; r_size];
     for i in 0..r_size {
-        // Create vectors with length prefix as expected by syscall
-        let mut row_with_len = vec![s_size as u32];
-        row_with_len.extend_from_slice(
-            &original_image[i * s_size..(i + 1) * s_size]
-                .iter()
-                .map(|&x| x as u32)
-                .collect::<Vec<u32>>(),
-        );
-
-        let mut s_with_len = vec![s_size as u32];
-        s_with_len.extend_from_slice(&s);
-
-        // Call syscall - result will be written to row_with_len[0]
-        unsafe {
-            syscall_inner_product(row_with_len.as_mut_ptr(), s_with_len.as_mut_ptr());
+        for j in 0..s_size {
+            temp[i] += (original_image[i * s_size + j] as u32) * s[j];
         }
-        temp[i] = row_with_len[0];
     }
 
-    // Then multiply r (1 x r_size) with the result (r_size x 1)
-    let mut r_with_len = vec![r_size as u32];
-    r_with_len.extend_from_slice(&r);
-
-    let mut temp_with_len = vec![r_size as u32];
-    temp_with_len.extend_from_slice(&temp);
-
-    // Call syscall - result will be written to r_with_len[0]
-    unsafe {
-        syscall_inner_product(r_with_len.as_mut_ptr(), temp_with_len.as_mut_ptr());
+    let mut sum = 0u32;
+    for i in 0..r_size {
+        sum += r[i] * temp[i];
     }
-    let sum = r_with_len[0];
 
     let mut tmp_freivalds = vec![0u32; r_size];
     let freivalds_s_size = freivalds_s.len();
     let freivalds_r_size = freivalds_r.len();
 
     for i in 0..freivalds_r_size {
-        // Create vectors with length prefix as expected by syscall
-        let mut row_with_len = vec![freivalds_s_size as u32];
-        row_with_len.extend_from_slice(
-            &middle_target_image[i * freivalds_s_size..(i + 1) * freivalds_s_size]
-                .iter()
-                .map(|&x| x as u32)
-                .collect::<Vec<u32>>(),
-        );
-
-        let mut s_with_len = vec![freivalds_s_size as u32];
-        s_with_len.extend_from_slice(&freivalds_s);
-
-        // Call syscall - result will be written to row_with_len[0]
-        unsafe {
-            syscall_inner_product(row_with_len.as_mut_ptr(), s_with_len.as_mut_ptr());
+        for j in 0..freivalds_s_size {
+            tmp_freivalds[i] += (middle_target_image[i * freivalds_s_size + j] as u32) * freivalds_s[j];
         }
-        tmp_freivalds[i] = row_with_len[0];
     }
 
-    // Create vectors with length prefix for final inner product
-    let mut freivalds_r_with_len = vec![freivalds_r_size as u32];
-    freivalds_r_with_len.extend_from_slice(&freivalds_r);
-
-    let mut tmp_freivalds_with_len = vec![freivalds_r_size as u32];
-    tmp_freivalds_with_len.extend_from_slice(&tmp_freivalds);
-
-    // Call syscall - result will be written to freivalds_r_with_len[0]
-    unsafe {
-        syscall_inner_product(
-            freivalds_r_with_len.as_mut_ptr(),
-            tmp_freivalds_with_len.as_mut_ptr(),
-        );
+    let mut sum_freivalds = 0u32;
+    for i in 0..freivalds_r_size {
+        sum_freivalds += freivalds_r[i] * tmp_freivalds[i];
     }
-    let sum_freivalds = freivalds_r_with_len[0];
 
     if sum != sum_freivalds {
         sp1_zkvm::io::commit(&false);

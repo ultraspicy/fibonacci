@@ -5,7 +5,6 @@ members = [
     "script",
     "verifier",
     "init",
-    "program-precompile"
 ]
 resolver = "2"
 
