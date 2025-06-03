@@ -1,0 +1,13 @@
+[workspace]
+members = [
+    "lib",
+    "program",
+    "script",
+    "verifier",
+    "init",
+    "program-precompile"
+]
+resolver = "2"
+
+[workspace.dependencies]
+alloy-sol-types = "0.7.7"

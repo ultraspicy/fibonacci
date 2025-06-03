@@ -1,6 +1,7 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 use blake3::hash;
+use sp1_zkvm::syscalls::syscall_inner_product;
 #[sp1_derive::cycle_tracker]
 
 pub fn main() {
@@ -16,7 +17,7 @@ pub fn main() {
     let freivalds_s = sp1_zkvm::io::read::<Vec<u32>>();
 
     // let mut tmp = vec![0u8; c.width as usize * c.height as usize];
-    
+
     /*
     Prove 1: prove r @ original_image @ s = freivalds_r @ middle_target_image @ freivalds_s
     r = freivalds_r @ H
@@ -31,9 +32,23 @@ pub fn main() {
     // First multiply original_image (r_size x s_size) with s (s_size x 1)
     let mut temp = vec![0u32; r_size];
     for i in 0..r_size {
-        for j in 0..s_size {
-            temp[i] += (original_image[i * s_size + j] as u32) * s[j];
+        // Create vectors with length prefix as expected by syscall
+        let mut row_with_len = vec![s_size as u32];
+        row_with_len.extend_from_slice(
+            &original_image[i * s_size..(i + 1) * s_size]
+                .iter()
+                .map(|&x| x as u32)
+                .collect::<Vec<u32>>(),
+        );
+
+        let mut s_with_len = vec![s_size as u32];
+        s_with_len.extend_from_slice(&s);
+
+        // Call syscall - result will be written to row_with_len[0]
+        unsafe {
+            syscall_inner_product(row_with_len.as_mut_ptr(), s_with_len.as_mut_ptr());
         }
+        temp[i] = row_with_len[0];
     }
 
     // Then multiply r (1 x r_size) with the result (r_size x 1)
@@ -48,7 +63,8 @@ pub fn main() {
 
     for i in 0..freivalds_r_size {
         for j in 0..freivalds_s_size {
-            tmp_freivalds[i] += (middle_target_image[i * freivalds_s_size + j] as u32) * freivalds_s[j];
+            tmp_freivalds[i] +=
+                (middle_target_image[i * freivalds_s_size + j] as u32) * freivalds_s[j];
         }
     }
 
@@ -59,11 +75,10 @@ pub fn main() {
     if sum != sum_freivalds {
         sp1_zkvm::io::commit(&false);
         return;
-    }
-    else {
+    } else {
         sp1_zkvm::io::commit(&true);
     }
-    
+
     /*
     Prove 2: prove |target_image - middle_target_image| <= 20
     */
@@ -72,7 +87,7 @@ pub fn main() {
     let mut cnt1 = 0;
     let mut cnt2 = 0;
     for i in 0..middle_target_image.len() {
-        let middle_val = middle_target_image[i]/(1<<22) as u32;
+        let middle_val = middle_target_image[i] / (1 << 22) as u32;
         let target_val = target_image[i] as u32;
         let difference = if middle_val > target_val {
             middle_val - target_val
