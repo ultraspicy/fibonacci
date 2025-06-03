@@ -37,3 +37,19 @@ demo/test_pk.bin
 demo/test_vk.bin
 
 Cargo.lock
+
+# Rust build directories
+**/target/
+**/target-*/
+**/debug/
+**/release/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
