@@ -1,8 +1,8 @@
 use lib::{load_image_from_file, BlurContext, ResizeContext};
-use sp1_sdk::{utils, ProverClient, SP1ProofWithPublicValues, SP1Stdin};
+use sp1_sdk::{include_elf, utils, ProverClient, SP1ProofWithPublicValues, SP1Stdin};
 
 /// The ELF we want to execute inside the zkVM.
-const ELF: &[u8] = include_bytes!("../../../elf/riscv32im-succinct-zkvm-elf");
+const ELF: &[u8] = include_elf!("../../../elf/riscv32im-succinct-zkvm-elf");
 
 const _FRAME_NUM: usize = 10;
 const INPUT_WIDTH: i32 = 400;
