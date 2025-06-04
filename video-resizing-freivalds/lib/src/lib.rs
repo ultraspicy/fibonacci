@@ -1,5 +1,7 @@
 pub mod  freivalds_resize;
 pub use  freivalds_resize::*;
+pub mod  resize;
+pub use  resize::*;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;

@@ -1,10 +1,11 @@
-use lib::{generate_horizontal_filter, generate_vertical_filter, load_image_from_file};
+use lib::{generate_horizontal_filter, generate_vertical_filter, load_image_from_file, ResizeContext};
 use sp1_sdk::{utils, ProverClient, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey};
 use sp1_sdk::include_elf;
 use rand::Rng;
 use clap::Parser;
 use std::io::Write;
 use blake3::{hash};
+use std::time::Instant;
 
 /// The ELF we want to execute inside the zkVM.
 const ELF: &[u8] = include_elf!("fibonacci-program");
@@ -14,7 +15,7 @@ const ELF: &[u8] = include_elf!("fibonacci-program");
 // const INPUT_HEIGHT: i32 = 320;
 // const OUTPUT_WIDTH: i32 = 120; // Hardcoded value, will be overridden by config
 // const OUTPUT_HEIGHT: i32 = 160;
-const DEBUGGING: bool = false;
+const DEBUGGING: bool = true;
 
 fn main() {
     // Setup logging.
@@ -35,9 +36,11 @@ fn main() {
     let image: Vec<u8> = load_image_from_file(input_file);
     let target_image: Vec<u8> = load_image_from_file(target_file);
 
-    // Build the full matrices
-    let h_matrix = lib::build_vertical_matrix(INPUT_HEIGHT, OUTPUT_HEIGHT);
-    let w_matrix = lib::build_horizontal_matrix(INPUT_WIDTH, OUTPUT_WIDTH);
+    let context =
+        ResizeContext::new(INPUT_WIDTH, INPUT_HEIGHT, OUTPUT_WIDTH, OUTPUT_HEIGHT).unwrap();
+    // // Build the full matrices
+    // let h_matrix = lib::build_vertical_matrix(INPUT_HEIGHT, OUTPUT_HEIGHT);
+    // let w_matrix = lib::build_horizontal_matrix(INPUT_WIDTH, OUTPUT_WIDTH);
     
     /*Debugging*/
     /*
@@ -57,28 +60,28 @@ fn main() {
     */
 
     // Calculate the middle image: H @ R @ W
-    let mut target_middle_image: Vec<u32> = vec![0; target_image.len()];
-    let mut temp = vec![0u32; INPUT_HEIGHT as usize * OUTPUT_WIDTH as usize];
-    for i in 0..INPUT_HEIGHT as usize {
-        for j in 0..OUTPUT_WIDTH as usize {
-            let mut sum = 0u32;
-            for k in 0..INPUT_WIDTH as usize {
-                // println!("{} {} {}", i * INPUT_WIDTH as usize + k, k, j);
-                sum = sum + image[i * INPUT_WIDTH as usize + k] as u32 * w_matrix[k][j] as u32;
-            }
-            temp[i * OUTPUT_WIDTH as usize + j] = sum;
-        }
-    }
+    // let mut target_middle_image: Vec<u32> = vec![0; target_image.len()];
+    // let mut temp = vec![0u32; INPUT_HEIGHT as usize * OUTPUT_WIDTH as usize];
+    // for i in 0..INPUT_HEIGHT as usize {
+    //     for j in 0..OUTPUT_WIDTH as usize {
+    //         let mut sum = 0u32;
+    //         for k in 0..INPUT_WIDTH as usize {
+    //             // println!("{} {} {}", i * INPUT_WIDTH as usize + k, k, j);
+    //             sum = sum + image[i * INPUT_WIDTH as usize + k] as u32 * w_matrix[k][j] as u32;
+    //         }
+    //         temp[i * OUTPUT_WIDTH as usize + j] = sum;
+    //     }
+    // }
 
-    for i in 0..OUTPUT_HEIGHT as usize {
-        for j in 0..OUTPUT_WIDTH as usize {
-            let mut sum = 0u32;
-            for k in 0..INPUT_HEIGHT as usize {
-                sum = sum + temp[k * OUTPUT_WIDTH as usize + j] as u32 * h_matrix[i][k] as u32;
-            }
-            target_middle_image[i * OUTPUT_WIDTH as usize + j] = sum;
-        }
-    }
+    // for i in 0..OUTPUT_HEIGHT as usize {
+    //     for j in 0..OUTPUT_WIDTH as usize {
+    //         let mut sum = 0u32;
+    //         for k in 0..INPUT_HEIGHT as usize {
+    //             sum = sum + temp[k * OUTPUT_WIDTH as usize + j] as u32 * h_matrix[i][k] as u32;
+    //         }
+    //         target_middle_image[i * OUTPUT_WIDTH as usize + j] = sum;
+    //     }
+    // }
 
     /*for debugging*/
     /*
@@ -97,45 +100,46 @@ fn main() {
 
     /* For the proof generation */
     // Generate random values for Freivalds' algorithm
-    let mut rng = rand::thread_rng();
-    let babybear_prime: u64 = 2013265921 as u64; //u64::pow(2, 31) - u64::pow(2, 27) + 1;
+    // let mut rng = rand::thread_rng();
+    // let babybear_prime: u64 = 2013265921 as u64; //u64::pow(2, 31) - u64::pow(2, 27) + 1;
     
-    let mut freivalds_left = Vec::<u32>::with_capacity(OUTPUT_HEIGHT as usize);
-    let mut freivalds_right = Vec::<u32>::with_capacity(OUTPUT_WIDTH as usize);
+    // let mut freivalds_left = Vec::<u32>::with_capacity(OUTPUT_HEIGHT as usize);
+    // let mut freivalds_right = Vec::<u32>::with_capacity(OUTPUT_WIDTH as usize);
 
-    for _ in 0..OUTPUT_HEIGHT {
-        freivalds_left.push(rng.gen_range(0..(babybear_prime as u32)));
-    }
+    // for _ in 0..OUTPUT_HEIGHT {
+    //     freivalds_left.push(rng.gen_range(0..(babybear_prime as u32)));
+    // }
 
-    for _ in 0..OUTPUT_WIDTH {
-        freivalds_right.push(rng.gen_range(0..(babybear_prime as u32)));
-    }
+    // for _ in 0..OUTPUT_WIDTH {
+    //     freivalds_right.push(rng.gen_range(0..(babybear_prime as u32)));
+    // }
 
-    // Calculate r_left * H and W * r_right
-    let mut r_left_h = vec![0u32; INPUT_HEIGHT as usize];
-    for i in 0..OUTPUT_HEIGHT as usize {
-        for j in 0..INPUT_HEIGHT as usize {
-            let product = (freivalds_left[i] as u32 * h_matrix[i][j] as u32);
-            r_left_h[j] = ((r_left_h[j] as u32 + product)) as u32;
-        }
-    }
-    let mut w_r_right = vec![0u32; INPUT_WIDTH as usize];
-    for i in 0..INPUT_WIDTH as usize {
-        for j in 0..OUTPUT_WIDTH as usize {
-            let product = (w_matrix[i][j] as u32 * freivalds_right[j] as u32);
-            w_r_right[i] = ((w_r_right[i] as u32 + product)) as u32;
-        }
-    }
+    // // Calculate r_left * H and W * r_right
+    // let mut r_left_h = vec![0u32; INPUT_HEIGHT as usize];
+    // for i in 0..OUTPUT_HEIGHT as usize {
+    //     for j in 0..INPUT_HEIGHT as usize {
+    //         let product = (freivalds_left[i] as u32 * h_matrix[i][j] as u32);
+    //         r_left_h[j] = ((r_left_h[j] as u32 + product)) as u32;
+    //     }
+    // }
+    // let mut w_r_right = vec![0u32; INPUT_WIDTH as usize];
+    // for i in 0..INPUT_WIDTH as usize {
+    //     for j in 0..OUTPUT_WIDTH as usize {
+    //         let product = (w_matrix[i][j] as u32 * freivalds_right[j] as u32);
+    //         w_r_right[i] = ((w_r_right[i] as u32 + product)) as u32;
+    //     }
+    // }
 
     let mut stdin = SP1Stdin::new();
+    stdin.write(&context);
     stdin.write_vec(image);
     stdin.write_vec(target_image);
 
-    stdin.write(&target_middle_image);
-    stdin.write(&r_left_h);
-    stdin.write(&w_r_right);
-    stdin.write(&freivalds_left);
-    stdin.write(&freivalds_right);
+    // stdin.write(&target_middle_image);
+    // stdin.write(&r_left_h);
+    // stdin.write(&w_r_right);
+    // stdin.write(&freivalds_left);
+    // stdin.write(&freivalds_right);
 
     // Create a `ProverClient` method.
     let client = ProverClient::from_env();
@@ -162,7 +166,10 @@ fn main() {
 
     } else {
         let (pk, vk) = client.setup(ELF);
+        let start = Instant::now();
         let mut proof = client.prove(&pk, &stdin).run().unwrap();
+        let duration = start.elapsed();
+        println!("Time for naive video resizing: {:?}", duration);
         println!("generated proof");
         let equal_sum: bool = proof.public_values.read::<bool>();
         println!("equal_sum: {}", equal_sum);
