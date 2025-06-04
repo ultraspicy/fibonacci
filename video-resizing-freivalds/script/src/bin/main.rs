@@ -5,6 +5,7 @@ use rand::Rng;
 use clap::Parser;
 use std::io::Write;
 use blake3::{hash};
+use std::time::Instant;
 
 /// The ELF we want to execute inside the zkVM.
 const ELF: &[u8] = include_elf!("fibonacci-program");
@@ -14,7 +15,7 @@ const ELF: &[u8] = include_elf!("fibonacci-program");
 // const INPUT_HEIGHT: i32 = 320;
 // const OUTPUT_WIDTH: i32 = 120; // Hardcoded value, will be overridden by config
 // const OUTPUT_HEIGHT: i32 = 160;
-const DEBUGGING: bool = false;
+const DEBUGGING: bool = true;
 
 fn main() {
     // Setup logging.
@@ -36,8 +37,8 @@ fn main() {
     let target_image: Vec<u8> = load_image_from_file(target_file);
 
     // Build the full matrices
-    let h_matrix = lib::build_vertical_matrix(INPUT_HEIGHT, OUTPUT_HEIGHT);
-    let w_matrix = lib::build_horizontal_matrix(INPUT_WIDTH, OUTPUT_WIDTH);
+    let h_matrix = lib::freivalds_gblur::build_vertical_matrix(INPUT_HEIGHT, 10, 30);
+    let w_matrix = lib::freivalds_gblur::build_horizontal_matrix(INPUT_WIDTH, 10, 30);
     
     /*Debugging*/
     /*
@@ -141,7 +142,10 @@ fn main() {
     let client = ProverClient::from_env();
     if (DEBUGGING == false) {
         let pk = serde_cbor::from_slice(&std::fs::read(target_pk_file).expect("reading pk failed")).expect("deserializing pk failed");
+        let start = Instant::now();
         let mut proof = client.prove(&pk, &stdin).run().unwrap();
+        let duration = start.elapsed();
+        println!("Proving time for freivalds gblur: {:?}", duration);
 
         proof
             .save(target_prove_file)
@@ -162,7 +166,10 @@ fn main() {
 
     } else {
         let (pk, vk) = client.setup(ELF);
+        let start = Instant::now();
         let mut proof = client.prove(&pk, &stdin).run().unwrap();
+        let duration = start.elapsed();
+        println!("Proving time for freivalds gblur: {:?}", duration);
         println!("generated proof");
         let equal_sum: bool = proof.public_values.read::<bool>();
         println!("equal_sum: {}", equal_sum);
