@@ -19,3 +19,4 @@ pgo-data.profdata
 .env
 /resources/*
 !/resources/generate_test_fixture.py
+./resources

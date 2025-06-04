@@ -112,8 +112,8 @@ fn main() {
     let mut rng = rand::thread_rng();
     let babybear_prime: u64 = 2013265921 as u64; //u64::pow(2, 31) - u64::pow(2, 27) + 1;
 
-    let mut freivalds_left = Vec::<u32>::with_capacity(OUTPUT_HEIGHT as usize);
-    let mut freivalds_right = Vec::<u32>::with_capacity(OUTPUT_WIDTH as usize);
+    let mut freivalds_left = Vec::<u32>::with_capacity(OUTPUT_HEIGHT as usize); // 120
+    let mut freivalds_right = Vec::<u32>::with_capacity(OUTPUT_WIDTH as usize); // 160
 
     for _ in 0..OUTPUT_HEIGHT {
         freivalds_left.push(rng.gen_range(0..(babybear_prime as u32)));
@@ -124,14 +124,14 @@ fn main() {
     }
 
     // Calculate r_left * H and W * r_right
-    let mut r_left_h = vec![0u32; INPUT_HEIGHT as usize];
+    let mut r_left_h = vec![0u32; INPUT_HEIGHT as usize]; // 240
     for i in 0..OUTPUT_HEIGHT as usize {
         for j in 0..INPUT_HEIGHT as usize {
             let product = (freivalds_left[i] as u32 * h_matrix[i][j] as u32);
             r_left_h[j] = (r_left_h[j] as u32 + product) as u32;
         }
     }
-    let mut w_r_right = vec![0u32; INPUT_WIDTH as usize];
+    let mut w_r_right = vec![0u32; INPUT_WIDTH as usize]; // 320
     for i in 0..INPUT_WIDTH as usize {
         for j in 0..OUTPUT_WIDTH as usize {
             let product = (w_matrix[i][j] as u32 * freivalds_right[j] as u32);
@@ -140,14 +140,20 @@ fn main() {
     }
 
     let mut stdin = SP1Stdin::new();
-    stdin.write_vec(image);
+    stdin.write_vec(image.clone());
     stdin.write_vec(target_image);
 
-    stdin.write(&target_middle_image);
-    stdin.write(&r_left_h);
-    stdin.write(&w_r_right);
-    stdin.write(&freivalds_left);
-    stdin.write(&freivalds_right);
+    stdin.write(&target_middle_image); // 320 x 240
+    stdin.write(&r_left_h); // 240
+    stdin.write(&w_r_right); // 320
+    stdin.write(&freivalds_left); // 120
+    stdin.write(&freivalds_right); // 160
+
+    // println!("image.len = {:?}", image.len());
+    // println!("r_left_h.len: {:?}", r_left_h.len());
+    // println!("w_r_right.len: {:?}", w_r_right.len());
+    // println!("freivalds_left.len: {:?}", freivalds_left.len());
+    // println!("freivalds_right.len: {:?}", freivalds_right.len());
 
     // Create a `ProverClient` method.
     let client = ProverClient::from_env();

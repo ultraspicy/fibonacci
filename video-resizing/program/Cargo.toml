@@ -5,6 +5,6 @@ edition = "2021"
 
 [dependencies]
 alloy-sol-types = { workspace = true }
-sp1-zkvm = "2.0.0"
+sp1-zkvm = { path = "./../../../sp1/crates/zkvm/entrypoint" }
 lib = { path = "../lib" }
-sp1-derive = "2.0.0"
+sp1-derive = { path = "./../../../sp1/crates/derive" }

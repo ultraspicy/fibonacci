@@ -19,7 +19,7 @@ pub struct ResizeContext {
 
 impl ResizeContext {
     pub fn new(src_w: i32, src_h: i32, dst_w: i32, dst_h: i32) -> Option<Self> {
-        let filter_size = 2; //should be 4
+        let filter_size = 4; 
         let mut context = ResizeContext {
             filter_pos: Vec::new(),
             filter: Vec::new(),

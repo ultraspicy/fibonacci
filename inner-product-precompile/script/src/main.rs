@@ -9,13 +9,13 @@ fn main() {
     utils::setup_logger();
 
     let p: u32 = 0xFFF5001;
-    let vec_len = 350;
+    let vec_len = 320;
 
     let mut rng = rand::thread_rng(); 
     let mut a: Vec<u32> = vec![vec_len];
-    a.extend((0..vec_len).map(|_| rng.gen_range(1..=1)));
+    a.extend((0..vec_len).map(|_| rng.gen_range(1..=3)));
     let mut b: Vec<u32> = vec![vec_len];
-    b.extend((0..vec_len).map(|_| rng.gen_range(1..=1)));
+    b.extend((0..vec_len).map(|_| rng.gen_range(1..=3)));
 
     let mut stdin = SP1Stdin::new();
     stdin.write(&a);
