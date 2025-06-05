@@ -44,7 +44,7 @@ fn main() {
         .expect("Missing target_pk_file");
 
     let context =
-        BlurContext::new(10.0, 10.0, 1, INPUT_WIDTH as usize, INPUT_HEIGHT as usize).unwrap();
+        BlurContext::new(10.0, 10.0, 1, OUTPUT_WIDTH as usize, OUTPUT_HEIGHT as usize).unwrap();
     // Reading the input image and target image
     let image: Vec<u8> = load_image_from_file(input_file);
     let target_image: Vec<u8> = load_image_from_file(target_file);
@@ -154,57 +154,37 @@ fn main() {
 
     // Create a `ProverClient` method.
     let client = ProverClient::from_env();
-    if (DEBUGGING == false) {
-        let pk = serde_cbor::from_slice(&std::fs::read(target_pk_file).expect("reading pk failed"))
-            .expect("deserializing pk failed");
-        let mut proof = client.prove(&pk, &stdin).run().unwrap();
+    
+    let (pk, vk) = client.setup(ELF);
+    let start = Instant::now();
+    let mut proof = client.prove(&pk, &stdin).run().unwrap();
+    let duration = start.elapsed();
+    println!("Naive gblur proving time: {:?}", duration);
+    println!("generated proof");
+    let equal_sum: bool = proof.public_values.read::<bool>();
+    println!("equal_sum: {}", equal_sum);
 
-        proof.save(target_prove_file).expect("saving proof failed");
+    let exceed_limit_20: u32 = proof.public_values.read::<u32>();
+    println!("exceed_limit_20: {}", exceed_limit_20);
 
-        let equal_sum: bool = proof.public_values.read::<bool>();
-        println!("equal_sum: {}", equal_sum);
+    let exceed_limit_50: u32 = proof.public_values.read::<u32>();
+    println!("exceed_limit_50: {}", exceed_limit_50);
 
-        let exceed_limit_20: u32 = proof.public_values.read::<u32>();
-        println!("exceed_limit_20: {}", exceed_limit_20);
+    let hash_target_image = proof.public_values.read::<blake3::Hash>();
+    println!("hash_target_image: {:?}", hash_target_image);
 
-        let exceed_limit_50: u32 = proof.public_values.read::<u32>();
-        println!("exceed_limit_50: {}", exceed_limit_50);
+    // Verify proof and public values
+    client.verify(&proof, &vk).expect("verification failed");
 
-        let hash_target_image = proof.public_values.read::<blake3::Hash>();
-        println!("hash_target_image: {:?}", hash_target_image);
-        println!("successfully generated proof for the program!");
-    } else {
-        let (pk, vk) = client.setup(ELF);
-        let start = Instant::now();
-        let mut proof = client.prove(&pk, &stdin).run().unwrap();
-        let duration = start.elapsed();
-        println!("Naive gblur proving time: {:?}", duration);
-        println!("generated proof");
-        let equal_sum: bool = proof.public_values.read::<bool>();
-        println!("equal_sum: {}", equal_sum);
+    // Test a round trip of proof serialization and deserialization.
+    proof.save(target_prove_file).expect("saving proof failed");
 
-        let exceed_limit_20: u32 = proof.public_values.read::<u32>();
-        println!("exceed_limit_20: {}", exceed_limit_20);
+    let deserialized_proof =
+        SP1ProofWithPublicValues::load(target_prove_file).expect("loading proof failed");
 
-        let exceed_limit_50: u32 = proof.public_values.read::<u32>();
-        println!("exceed_limit_50: {}", exceed_limit_50);
+    client
+        .verify(&deserialized_proof, &vk)
+        .expect("verification failed");
 
-        let hash_target_image = proof.public_values.read::<blake3::Hash>();
-        println!("hash_target_image: {:?}", hash_target_image);
-
-        // Verify proof and public values
-        client.verify(&proof, &vk).expect("verification failed");
-
-        // Test a round trip of proof serialization and deserialization.
-        proof.save(target_prove_file).expect("saving proof failed");
-
-        let deserialized_proof =
-            SP1ProofWithPublicValues::load(target_prove_file).expect("loading proof failed");
-
-        client
-            .verify(&deserialized_proof, &vk)
-            .expect("verification failed");
-
-        println!("successfully generated and verified proof for the program!");
-    }
+    println!("successfully generated and verified proof for the program!");
 }
