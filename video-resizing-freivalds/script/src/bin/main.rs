@@ -157,7 +157,7 @@ fn main() {
     
     let (pk, vk) = client.setup(ELF);
     let start = Instant::now();
-    let mut proof = client.prove(&pk, &stdin).run().unwrap();
+    let mut proof = client.prove(&pk, &stdin).compressed().run().unwrap();
     let duration = start.elapsed();
     println!("Naive gblur proving time: {:?}", duration);
     println!("generated proof");
