@@ -1,0 +1,18 @@
+/Users/ultraspicy/Developer/fibonacci/video-resizing-freivalds-precompile/target/release/deps/libsp1_curves-c70dab0a27c323c0.rmeta: /Users/ultraspicy/Developer/sp1/crates/curves/src/lib.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/edwards/mod.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/edwards/ed25519.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/params.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/scalar_mul.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/uint256.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/utils.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/mod.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/bls12_381.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/bn254.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/secp256k1.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/secp256r1.rs
+
+/Users/ultraspicy/Developer/fibonacci/video-resizing-freivalds-precompile/target/release/deps/libsp1_curves-c70dab0a27c323c0.rlib: /Users/ultraspicy/Developer/sp1/crates/curves/src/lib.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/edwards/mod.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/edwards/ed25519.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/params.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/scalar_mul.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/uint256.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/utils.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/mod.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/bls12_381.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/bn254.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/secp256k1.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/secp256r1.rs
+
+/Users/ultraspicy/Developer/fibonacci/video-resizing-freivalds-precompile/target/release/deps/sp1_curves-c70dab0a27c323c0.d: /Users/ultraspicy/Developer/sp1/crates/curves/src/lib.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/edwards/mod.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/edwards/ed25519.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/params.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/scalar_mul.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/uint256.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/utils.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/mod.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/bls12_381.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/bn254.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/secp256k1.rs /Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/secp256r1.rs
+
+/Users/ultraspicy/Developer/sp1/crates/curves/src/lib.rs:
+/Users/ultraspicy/Developer/sp1/crates/curves/src/edwards/mod.rs:
+/Users/ultraspicy/Developer/sp1/crates/curves/src/edwards/ed25519.rs:
+/Users/ultraspicy/Developer/sp1/crates/curves/src/params.rs:
+/Users/ultraspicy/Developer/sp1/crates/curves/src/scalar_mul.rs:
+/Users/ultraspicy/Developer/sp1/crates/curves/src/uint256.rs:
+/Users/ultraspicy/Developer/sp1/crates/curves/src/utils.rs:
+/Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/mod.rs:
+/Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/bls12_381.rs:
+/Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/bn254.rs:
+/Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/secp256k1.rs:
+/Users/ultraspicy/Developer/sp1/crates/curves/src/weierstrass/secp256r1.rs:

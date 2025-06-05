@@ -1,0 +1,10 @@
+/Users/ultraspicy/Developer/fibonacci/video-resizing-freivalds-precompile/target/release/deps/libthiserror-d6f4ec61930d1cfa.rmeta: /Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/lib.rs /Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/aserror.rs /Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/display.rs /Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/var.rs
+
+/Users/ultraspicy/Developer/fibonacci/video-resizing-freivalds-precompile/target/release/deps/libthiserror-d6f4ec61930d1cfa.rlib: /Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/lib.rs /Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/aserror.rs /Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/display.rs /Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/var.rs
+
+/Users/ultraspicy/Developer/fibonacci/video-resizing-freivalds-precompile/target/release/deps/thiserror-d6f4ec61930d1cfa.d: /Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/lib.rs /Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/aserror.rs /Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/display.rs /Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/var.rs
+
+/Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/lib.rs:
+/Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/aserror.rs:
+/Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/display.rs:
+/Users/ultraspicy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.11/src/var.rs:

@@ -1,0 +1,30 @@
+[sp1]  warning: creating a mutable reference to mutable static is discouraged
+[sp1]    --> /Users/ultraspicy/Developer/sp1/crates/zkvm/entrypoint/src/syscalls/io.rs:31:26
+[sp1]     |
+[sp1]  31 |                 unsafe { zkvm::PUBLIC_VALUES_HASHER.as_mut().unwrap().update(pi_slice) };
+[sp1]     |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+[sp1]     |
+[sp1]     = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/static-mut-references.html>
+[sp1]     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+[sp1]     = note: `#[warn(static_mut_refs)]` on by default
+[sp1]  
+[sp1]  warning: `sp1-zkvm` (lib) generated 1 warning
+[sp1]     Compiling fibonacci-program v0.1.0 (/Users/ultraspicy/Developer/fibonacci/video-resizing-freivalds-precompile/program)
+[sp1]  warning: unused import: `blake3::hash`
+[sp1]   --> program/src/main.rs:3:5
+[sp1]    |
+[sp1]  3 | use blake3::hash;
+[sp1]    |     ^^^^^^^^^^^^
+[sp1]    |
+[sp1]    = note: `#[warn(unused_imports)]` on by default
+[sp1]  
+[sp1]  warning: unnecessary `unsafe` block
+[sp1]    --> program/src/main.rs:55:9
+[sp1]     |
+[sp1]  55 |         unsafe {
+[sp1]     |         ^^^^^^ unnecessary `unsafe` block
+[sp1]     |
+[sp1]     = note: `#[warn(unused_unsafe)]` on by default
+[sp1]  
+[sp1]  warning: `fibonacci-program` (bin "fibonacci-program") generated 2 warnings (run `cargo fix --bin "fibonacci-program"` to apply 1 suggestion)
+[sp1]      Finished `release` profile [optimized] target(s) in 0.18s

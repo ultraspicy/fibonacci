@@ -139,7 +139,7 @@ impl BlurContext {
         }
         // println!("cycle-tracker-end: mul pass");
 
-        for i in 0..src.len() {
+        for i in 0..19200 {
             output[i] = src[i].to_num::<u32>().max(min_f).min(max_f) as u8;
         }
     }
