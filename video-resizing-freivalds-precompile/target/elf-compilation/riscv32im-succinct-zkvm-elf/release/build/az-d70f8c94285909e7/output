@@ -1,6 +1,0 @@
-$ mkdir -p "/Users/ultraspicy/Developer/fibonacci/video-resizing-freivalds-precompile/target/elf-compilation/riscv32im-succinct-zkvm-elf/release/build/az-d70f8c94285909e7/out/try_track_caller"
-$ cd "/Users/ultraspicy/Developer/fibonacci/video-resizing-freivalds-precompile/target/elf-compilation/riscv32im-succinct-zkvm-elf/release/build/az-d70f8c94285909e7/out/try_track_caller"
-$ printf '%s' "// try_tra"... > "/Users/ultraspicy/Developer/fibonacci/video-resizing-freivalds-precompile/target/elf-compilation/riscv32im-succinct-zkvm-elf/release/build/az-d70f8c94285909e7/out/try_track_caller/try_track_caller.rs"
-$ cd "/Users/ultraspicy/Developer/fibonacci/video-resizing-freivalds-precompile/target/elf-compilation/riscv32im-succinct-zkvm-elf/release/build/az-d70f8c94285909e7/out/try_track_caller" && "/Users/ultraspicy/.rustup/toolchains/succinct/bin/rustc" "try_track_caller.rs" "--emit=dep-info,metadata" >& /dev/null
-cargo:rustc-cfg=track_caller
-$ rm -r "/Users/ultraspicy/Developer/fibonacci/video-resizing-freivalds-precompile/target/elf-compilation/riscv32im-succinct-zkvm-elf/release/build/az-d70f8c94285909e7/out/try_track_caller"
