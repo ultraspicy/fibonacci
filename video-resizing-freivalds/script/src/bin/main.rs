@@ -158,7 +158,7 @@ fn main() {
     println!("client setup took: {:?}", duration);
 
     start = Instant::now();
-    let mut proof = client.prove(&pk, &stdin).run().unwrap();
+    let mut proof = client.prove(&pk, &stdin).compressed().run().unwrap();
     duration = start.elapsed();
     println!("generating proof took: {:?}", duration);
 
