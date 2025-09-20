@@ -1,0 +1,30 @@
+from "EMBED" import sample_challenge
+
+const u32 HEIGHT = 24
+const u32 WIDTH = 32
+const field ZERO = 0
+
+def main(private field[HEIGHT][WIDTH] original_frame, private field[HEIGHT] rta, private field[HEIGHT][WIDTH] result_frame, private field[HEIGHT] r) -> field:    
+    field x = sample_challenge([...rta])
+
+    field[WIDTH] rTA_times_original_frame = [ZERO; WIDTH]
+    for u32 i in 0..HEIGHT do
+        for u32 j in 0..WIDTH do 
+            rTA_times_original_frame[j] = (rTA_times_original_frame[j] + rta[i] * original_frame[i][j])
+        endfor
+    endfor 
+    field[WIDTH] rT_times_result_frame = [ZERO; WIDTH]
+    for u32 i in 0..HEIGHT do
+        for u32 j in 0..WIDTH do
+            rT_times_result_frame[j] = (rT_times_result_frame[j] + r[i] * result_frame[i][j])
+        endfor
+    endfor 
+    for u32 i in 0..WIDTH do
+        assert(rTA_times_original_frame[i] == rT_times_result_frame[i])
+    endfor 
+    
+    // Annoying detail, when we're faking the randomness, we need to artificially force one random input.
+    assert(r[0] * x == r[1] * x)
+
+   return rTA_times_original_frame[0]
+
