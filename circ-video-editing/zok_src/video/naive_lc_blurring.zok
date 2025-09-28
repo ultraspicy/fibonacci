@@ -1,0 +1,114 @@
+const u32 HEIGHT = 48
+const u32 WIDTH = 64
+const field ZERO = 0
+const u32 BLUR_SIZE = 5
+const u32 BLUR_RADIUS = 2  // (BLUR_SIZE - 1) / 2
+
+def main(private field[HEIGHT][WIDTH] original_frame) -> field[HEIGHT][WIDTH]:    
+    field [HEIGHT][WIDTH] result = [[ZERO; WIDTH]; HEIGHT]
+    
+    // Note: the way that CirC handles conditionals is really bad.
+    // You cannot have a lot of conditionals in a CirC program or else everything gets gummed up.
+    // Consequently, this blurring code is written in a way where we handle the different sections
+    // of the image separately.
+
+    // Handle interior pixels (full 5x5 neighborhood)
+    for u32 i in BLUR_RADIUS..(HEIGHT - BLUR_RADIUS) do
+        for u32 j in BLUR_RADIUS..(WIDTH - BLUR_RADIUS) do
+            for u32 ii in (i - BLUR_RADIUS)..(i + BLUR_RADIUS + 1) do
+                for u32 jj in (j - BLUR_RADIUS)..(j + BLUR_RADIUS + 1) do
+                    result[i][j] = result[i][j] + original_frame[ii][jj]
+                endfor
+            endfor
+        endfor
+    endfor
+    
+    // Handle top-left corner
+    for u32 i in 0..BLUR_RADIUS do
+        for u32 j in 0..BLUR_RADIUS do
+            for u32 ii in 0..(i + BLUR_RADIUS + 1) do
+                for u32 jj in 0..(j + BLUR_RADIUS + 1) do
+                    result[i][j] = result[i][j] + original_frame[ii][jj]
+                endfor
+            endfor
+        endfor
+    endfor
+    
+    // Handle top edge (excluding corners)
+    for u32 i in 0..BLUR_RADIUS do
+        for u32 j in BLUR_RADIUS..(WIDTH - BLUR_RADIUS) do
+            for u32 ii in 0..(i + BLUR_RADIUS + 1) do
+                for u32 jj in (j - BLUR_RADIUS)..(j + BLUR_RADIUS + 1) do
+                    result[i][j] = result[i][j] + original_frame[ii][jj]
+                endfor
+            endfor
+        endfor
+    endfor
+    
+    // Handle top-right corner
+    for u32 i in 0..BLUR_RADIUS do
+        for u32 j in (WIDTH - BLUR_RADIUS)..WIDTH do
+            for u32 ii in 0..(i + BLUR_RADIUS + 1) do
+                for u32 jj in (j - BLUR_RADIUS)..WIDTH do
+                    result[i][j] = result[i][j] + original_frame[ii][jj]
+                endfor
+            endfor
+        endfor
+    endfor
+    
+    // Handle bottom-left corner
+    for u32 i in (HEIGHT - BLUR_RADIUS)..HEIGHT do
+        for u32 j in 0..BLUR_RADIUS do
+            for u32 ii in (i - BLUR_RADIUS)..HEIGHT do
+                for u32 jj in 0..(j + BLUR_RADIUS + 1) do
+                    result[i][j] = result[i][j] + original_frame[ii][jj]
+                endfor
+            endfor
+        endfor
+    endfor
+    
+    // Handle bottom edge (excluding corners)
+    for u32 i in (HEIGHT - BLUR_RADIUS)..HEIGHT do
+        for u32 j in BLUR_RADIUS..(WIDTH - BLUR_RADIUS) do
+            for u32 ii in (i - BLUR_RADIUS)..HEIGHT do
+                for u32 jj in (j - BLUR_RADIUS)..(j + BLUR_RADIUS + 1) do
+                    result[i][j] = result[i][j] + original_frame[ii][jj]
+                endfor
+            endfor
+        endfor
+    endfor
+    
+    // Handle bottom-right corner
+    for u32 i in (HEIGHT - BLUR_RADIUS)..HEIGHT do
+        for u32 j in (WIDTH - BLUR_RADIUS)..WIDTH do
+            for u32 ii in (i - BLUR_RADIUS)..HEIGHT do
+                for u32 jj in (j - BLUR_RADIUS)..WIDTH do
+                    result[i][j] = result[i][j] + original_frame[ii][jj]
+                endfor
+            endfor
+        endfor
+    endfor
+    
+    // Handle left boundary columns (j = 0 to BLUR_RADIUS-1, excluding corners already handled)
+    for u32 i in BLUR_RADIUS..(HEIGHT - BLUR_RADIUS) do
+        for u32 j in 0..BLUR_RADIUS do
+            for u32 ii in (i - BLUR_RADIUS)..(i + BLUR_RADIUS + 1) do
+                for u32 jj in 0..(j + BLUR_RADIUS + 1) do
+                    result[i][j] = result[i][j] + original_frame[ii][jj]
+                endfor
+            endfor
+        endfor
+    endfor
+    
+    // Handle right boundary columns (j = WIDTH-BLUR_RADIUS to WIDTH-1, excluding corners already handled)
+    for u32 i in BLUR_RADIUS..(HEIGHT - BLUR_RADIUS) do
+        for u32 j in (WIDTH - BLUR_RADIUS)..WIDTH do
+            for u32 ii in (i - BLUR_RADIUS)..(i + BLUR_RADIUS + 1) do
+                for u32 jj in (j - BLUR_RADIUS)..WIDTH do
+                    result[i][j] = result[i][j] + original_frame[ii][jj]
+                endfor
+            endfor
+        endfor
+    endfor
+
+    return result
