@@ -1,0 +1,6 @@
+[package]
+name = "video_blurring"
+type = "bin"
+authors = [""]
+
+[dependencies]

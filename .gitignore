@@ -12,6 +12,7 @@
 /video-trimming/trimmed_decomposed_frames_2/
 /video-trimming/trimmed_frames/
 /video-trimming/target/
+/noir-video-resizing/*/target/
 
 video-resizing-freivalds/init/config.json
 video-resizing-freivalds/script/config.json
