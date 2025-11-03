@@ -1,0 +1,6 @@
+[package]
+name = "non_keyframe_edits"
+type = "bin"
+authors = ["your old pal sasha"]
+
+[dependencies]
