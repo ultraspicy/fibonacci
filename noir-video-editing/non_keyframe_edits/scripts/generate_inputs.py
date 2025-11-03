@@ -19,20 +19,28 @@ def main():
 
     image_height = len(prover_inputs['rTA'])
     image_width = len(prover_inputs['As'])
-    delta_len = len(prover_inputs['delta'][0])
+    max_delta_len = len(prover_inputs['delta_batches'])
+    delta_batch_size = len(prover_inputs['delta_batches'][0])
     # Reflects the empirical distribution of deltas we found.
-    random_deltas = [str(random.randint(0, 7)) for _ in range(delta_len)]
-    random_i_indices = [str(random.randint(0, image_height - 1)) for _ in range(delta_len)]
-    random_j_indices = [str(random.randint(0, image_width - 1)) for _ in range(delta_len)]
-    delta = [random_deltas, random_i_indices, random_j_indices]
-    transformed_delta = delta.copy()
+    delta_batches = [[str(random.randint(0, 7)) for _ in range(delta_batch_size)] for __ in range(max_delta_len)]
+    delta_is = [str(random.randint(0, image_height - 1)) for _ in range(max_delta_len)]
+    delta_js = [[str(random.randint(0, image_width - 1)) for _ in range(delta_batch_size)] for __ in range(max_delta_len)]
+
+    transformed_delta_batches = delta_batches.copy()
+    transformed_delta_is = delta_is.copy()
+    transformed_delta_js = delta_js.copy()
+    
     r = [str(random.randint(0, 2**250-1)) for _ in range(image_height)]
     rTA = r.copy()
     s = [str(random.randint(0, 2**250-1)) for _ in range(image_width)]
     As = s.copy()
 
-    prover_inputs['delta'] = delta
-    prover_inputs['transformed_delta'] = transformed_delta
+    prover_inputs['delta_batches'] = delta_batches
+    prover_inputs['delta_is'] = delta_is
+    prover_inputs['delta_js'] = delta_js
+    prover_inputs['transformed_delta_batches'] = transformed_delta_batches
+    prover_inputs['transformed_delta_is'] = transformed_delta_is
+    prover_inputs['transformed_delta_js'] = transformed_delta_js
     prover_inputs['r'] = r
     prover_inputs['s'] = s
     prover_inputs['rTA'] = rTA
