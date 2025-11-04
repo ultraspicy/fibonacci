@@ -1,9 +1,26 @@
 global IMAGE_HEIGHT: u32 = 720;
 global IMAGE_WIDTH: u32 = 1280;
+global PIXEL_THRESHOLD: u32 = 10;
 // global BLUR_DIAMETER: u32 = 5;
-global BLUR_RADIUS: u32 = 2; // Radius is floor of diameter / 2
+//global BLUR_RADIUS: u32 = 2; // Radius is floor of diameter / 2
 
-fn main(original_image: [[Field; IMAGE_WIDTH]; IMAGE_HEIGHT], edited_image: [[Field; IMAGE_WIDTH]; IMAGE_HEIGHT], r: pub [Field; IMAGE_HEIGHT], s: pub [Field; IMAGE_WIDTH], rTA: pub [Field; IMAGE_HEIGHT], As: pub [Field; IMAGE_WIDTH]) -> pub [Field; 2] {
+fn main(original_image: [[Field; IMAGE_WIDTH]; IMAGE_HEIGHT], 
+        edited_image: [[Field; IMAGE_WIDTH]; IMAGE_HEIGHT], 
+        r: pub [Field; IMAGE_HEIGHT], 
+        s: pub [Field; IMAGE_WIDTH], 
+        rTA: pub [Field; IMAGE_HEIGHT], 
+        As: pub [Field; IMAGE_WIDTH]) -> pub [Field; 2] {
+    
+    // the original_image and edited_image 
+    // should be close to other pixel wise
+    for i in 0..IMAGE_HEIGHT {
+        for j in 0..IMAGE_WIDTH {
+            assert(abs_diff(original_image[i][j], edited_image[i][j]) < PIXEL_THRESHOLD);
+        }
+    }
+
+    // after Freivald transformation, the left hand side should
+    // be equal to the right hand side 
     let mut IAs = [0; IMAGE_HEIGHT];
     for i in 0..IMAGE_HEIGHT {
         let mut sum = 0;
@@ -17,7 +34,6 @@ fn main(original_image: [[Field; IMAGE_WIDTH]; IMAGE_HEIGHT], edited_image: [[Fi
     for i in 0..IMAGE_HEIGHT {
         rTAIAs += rTA[i] * IAs[i];
     }
-    
 
     let mut Fs = [0; IMAGE_HEIGHT];
     for i in 0..IMAGE_HEIGHT {
@@ -136,4 +152,25 @@ fn main(original_image: [[Field; IMAGE_WIDTH]; IMAGE_HEIGHT], edited_image: [[Fi
     // }
 
     // output
+}
+
+fn field_to_u32(f: Field) -> u32 {
+    let bytes: [u8;4] = f.to_le_bytes();
+    
+    let result = (bytes[0] as u32) 
+               | ((bytes[1] as u32) << 8)
+               | ((bytes[2] as u32) << 16)
+               | ((bytes[3] as u32) << 24);
+    
+    result
+}
+
+fn abs_diff(a: Field, b: Field) -> u32 {
+    let a_u32 = field_to_u32(a);
+    let b_u32 = field_to_u32(b);
+    if a_u32 >= b_u32 {
+        a_u32 - b_u32
+    } else {
+        b_u32 - a_u32
+    }
 }
