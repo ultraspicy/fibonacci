@@ -2,6 +2,7 @@
 import pathlib
 import random
 import sys
+import numpy as np
 import tomllib
 import tomli_w
 
@@ -20,13 +21,18 @@ def main():
     image_height = len(prover_inputs['original_image'])
     image_width = len(prover_inputs['original_image'][0])
     random_image = [[str(random.randint(0, 255)) for _ in range(image_width)] for _ in range(image_height)]
+
+    target_middle_image = random_image.copy()
     edited_image = random_image.copy()
-    r = [str(random.randint(0, 2**250-1)) for _ in range(image_height)]
+    r = [str(random.randint(0, bn128_scalar_modulus - 1)) for _ in range(image_height)]
     rTA = r.copy()
-    s = [str(random.randint(0, 2**250-1)) for _ in range(image_width)]
+    s = [str(random.randint(0, bn128_scalar_modulus - 1)) for _ in range(image_width)]
     As = s.copy()
 
+
+
     prover_inputs['original_image'] = random_image
+    prover_inputs['target_middle_image'] = target_middle_image
     prover_inputs['edited_image'] = edited_image
     prover_inputs['r'] = r
     prover_inputs['s'] = s

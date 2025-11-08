@@ -14,6 +14,7 @@
 /video-trimming/trimmed_frames/
 /video-trimming/target/
 /noir-video-resizing/*/target/
+/noir-video-resizing/*/Prover.toml/
 
 video-resizing-freivalds/init/config.json
 video-resizing-freivalds/script/config.json

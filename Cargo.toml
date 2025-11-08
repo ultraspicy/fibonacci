@@ -11,7 +11,7 @@ members = [
   "inner-product-proof/script",
   "inner-product-precompile/program",
   "inner-product-precompile/script"
-]
+, "noir-video-editing/generate_freivalds_inputs"]
 resolver = "2"
 
 [workspace.package]

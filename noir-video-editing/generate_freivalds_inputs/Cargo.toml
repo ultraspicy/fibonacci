@@ -1,0 +1,12 @@
+[package]
+name = "generate_freivalds_inputs"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rand = "0.8"
+toml = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+ark-bn254 = { version = "0.5.0"}
+ark-ff = { version = "0.5.0"}
+rayon = "1.10"

@@ -9,7 +9,8 @@ echo -e "\033[0;32m===== Setting Up Proofs =====\033[0m"
 nargo check --overwrite
 
 # Populate the Prover.toml file with inputs
-python3 ./scripts/generate_inputs.py
+# python3 ./scripts/generate_inputs.py
+cargo run --release --manifest-path ../generate_freivalds_inputs/Cargo.toml gblur
 
 # Generate a witness
 nargo execute
