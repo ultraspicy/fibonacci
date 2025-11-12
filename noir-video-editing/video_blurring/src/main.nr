@@ -17,11 +17,12 @@ fn main(original_image: [[Field; IMAGE_WIDTH]; IMAGE_HEIGHT],
     for i in 0..IMAGE_HEIGHT {
         for j in 0..IMAGE_WIDTH {
             let pixel_diff_felt = (target_middle_image[i][j] - edited_image[i][j]) + PIXEL_THRESHOLD_FELT;
-            // Safety: The range check on the next line constrains this, as before a result of not having an analog of reinterpret_cast.
-            let pixel_diff = unsafe { field_to_u32(pixel_diff_felt) };
-            // Can comment this out for benchmarking? Not theoretically needed constraint but it makes compiler happy.
-            assert((pixel_diff as Field) == pixel_diff_felt);
-            assert(pixel_diff < PIXEL_THRESHOLD_DOUBLE);
+            // // Safety: The range check on the next line constrains this, as before a result of not having an analog of reinterpret_cast.
+            // let pixel_diff = unsafe { field_to_u32(pixel_diff_felt) };
+            // // Can comment this out for benchmarking? Not theoretically needed constraint but it makes compiler happy.
+            // assert((pixel_diff as Field) == pixel_diff_felt);
+            // assert(pixel_diff < PIXEL_THRESHOLD_DOUBLE);
+            pixel_diff_felt.assert_max_bit_size::<7>();
         }
     }
 
