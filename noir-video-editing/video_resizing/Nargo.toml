@@ -1,0 +1,6 @@
+[package]
+name = "video_resizing"
+type = "bin"
+authors = [""]
+
+[dependencies]
