@@ -9,6 +9,8 @@ import tomli_w
 def main():
     # Path to Prover.toml
     config_path = pathlib.Path("Prover.toml")
+    # The order of the scalar field for the BN128 curve
+    bn128_scalar_modulus = 21888242871839275222246405745257275088548364400416034343698204186575808495617
 
     if not config_path.exists():
         sys.stderr.write(f"Error: {config_path} does not exist.\n")
@@ -18,8 +20,8 @@ def main():
     with config_path.open("rb") as f:
         prover_inputs = tomllib.load(f)
 
-    image_height = len(prover_inputs['original_image'])
-    image_width = len(prover_inputs['original_image'][0])
+    image_height = 240#len(prover_inputs['original_image'])
+    image_width = 320#len(prover_inputs['original_image'][0])
     random_image = [[str(random.randint(0, 255)) for _ in range(image_width)] for _ in range(image_height)]
 
     target_middle_image = random_image.copy()

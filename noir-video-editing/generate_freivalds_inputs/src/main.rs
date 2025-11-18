@@ -13,6 +13,7 @@ use toml;
 static SIGMA: f64 = 10.0;
 static GBLUR_RADIUS: usize = 30;
 static KERNEL_SCALE: u64 = 1u64 << 32;
+static FILTER_BITS: usize = 16;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ProverInputs {
@@ -34,10 +35,11 @@ enum MatrixType {
     GBlur,
 }
 
+// generate a random 256 bit Fr
 fn gen_rand_scalar() -> Fr {
     let mut rng = rand::thread_rng();
     loop {
-        let random_bytes: [u8; 32] = rng.gen();
+        let random_bytes: [u8; 32] = rng.gen(); //  a syntax sugar to generates 32 random bytes and packs them into the array
         if let Some(val) = Fr::from_random_bytes(&random_bytes) {
             return val;
         }
@@ -95,12 +97,43 @@ fn vector_matrix_product(v: &[Fr], a: &[Vec<Fr>]) -> Vec<Fr> {
     assert!(height == v.len());
     let width = a[0].len();
     let mut output = vec![Fr::zero(); width];
+    
     for i in 0..height {
         for j in 0..width {
             output[j] += a[i][j] * v[i];
         }
     }
     output
+}
+
+// Regular matrix-matrix product (no band optimization)
+fn matrix_matrix_product(a: &[Vec<Fr>], b: &[Vec<Fr>]) -> Vec<Vec<Fr>> {
+    let a_height = a.len();
+    assert!(a_height > 0);
+    let a_width = a[0].len();
+
+    let b_height = b.len();
+    assert!(b_height > 0);
+    let b_width = b[0].len();
+
+    assert!(
+        a_width == b_height,
+        "Matrix dimensions incompatible for multiplication"
+    );
+
+    a.par_iter()
+        .map(|a_row| {
+            let mut row = vec![Fr::zero(); b_width];
+            for j in 0..b_width {
+                let mut inner_prod = Fr::zero();
+                for k in 0..a_width {
+                    inner_prod += a_row[k] * b[k][j];
+                }
+                row[j] = inner_prod;
+            }
+            row
+        })
+        .collect()
 }
 
 // Matrix-matrix product AB where A is a band matrix (parallelized)
@@ -219,8 +252,71 @@ fn create_tridiagonal_matrix(size: usize) -> Vec<Vec<Fr>> {
     matrix
 }
 
-fn create_resizing_matrix(_size: usize) -> Vec<Vec<Fr>> {
-    unimplemented!("Resizing matrix not yet implemented");
+// the original matrix is m*n, the target resized image is p*q
+// then the vetical filter will be p*m
+// the horizontal filter will be n*q
+fn create_resizing_matrix(src_size: usize, dst_size: usize, for_horizontal: bool) -> Vec<Vec<Fr>> {
+    
+    // For horizontal (right matrix): need transpose, so create n × q, store as q × n
+    // For vertical (left matrix): create p × m directly
+    let matrix = create_resize_matrix_impl(src_size, dst_size);
+    
+    if for_horizontal {
+        // Transpose for horizontal matrix
+        transpose(matrix)
+    } else {
+        matrix
+    }
+}
+
+fn create_resize_matrix_impl(src_size: usize, dst_size: usize) -> Vec<Vec<Fr>> {
+    let filter_size = 4;
+    let mut matrix = vec![vec![Fr::zero(); src_size]; dst_size];
+    
+    // x_inc is scaling factor in 16.16 fixed point
+    let x_inc = ((src_size << 16) / dst_size + 1) >> 1;
+    
+    for i in 0..dst_size {
+        // Get source position in 16.16 fixed point
+        let src_pos = (i * x_inc) >> 15;
+        
+        // Get fractional part normalized to FILTER_BITS
+        let xx_inc = x_inc & 0xffff;
+        let xx = (xx_inc * (1 << FILTER_BITS)) / x_inc;
+        
+        // Calculate filter weights for this destination row
+        for j in 0..filter_size {
+            let coeff_u64 = if j == 0 {
+                (1u64 << FILTER_BITS) - (xx as u64)
+            } else {
+                xx as u64
+            };
+            
+            // Place coefficient in matrix if within bounds
+            let src_idx = src_pos + j;
+            if src_idx < src_size {
+                matrix[i][src_idx] = Fr::from(coeff_u64);
+            }
+        }
+    }
+    
+    matrix
+}
+
+fn transpose(matrix: Vec<Vec<Fr>>) -> Vec<Vec<Fr>> {
+    let rows = matrix.len();
+    if rows == 0 {
+        return vec![];
+    }
+    let cols = matrix[0].len();
+    
+    let mut transposed = vec![vec![Fr::zero(); rows]; cols];
+    for i in 0..rows {
+        for j in 0..cols {
+            transposed[j][i] = matrix[i][j].clone();
+        }
+    }
+    transposed
 }
 
 fn gaussian_kernel1d(sigma: f64, radius: i32) -> Vec<f64> {
@@ -300,10 +396,10 @@ fn create_gblur_matrix(size: usize, sigma: f64, radius: usize) -> Vec<Vec<Fr>> {
     matrix
 }
 
-fn create_matrix(matrix_type: MatrixType, size: usize) -> Vec<Vec<Fr>> {
+fn create_matrix(matrix_type: MatrixType, size: usize, need_transpose: bool) -> Vec<Vec<Fr>> {
     match matrix_type {
         MatrixType::Tridiagonal => create_tridiagonal_matrix(size),
-        MatrixType::Resizing => create_resizing_matrix(size),
+        MatrixType::Resizing => create_resizing_matrix(size, size / 2, need_transpose),
         MatrixType::GBlur => create_gblur_matrix(size, SIGMA, GBLUR_RADIUS),
     }
 }
@@ -338,6 +434,11 @@ fn main() {
         MatrixType::Tridiagonal // Default
     };
 
+    let adjust_factor = match matrix_type {
+        MatrixType::Resizing => 2,
+        _ => 1,
+    };
+
     println!("Using matrix type: {:?}", matrix_type);
 
     let config_path = Path::new("Prover.toml");
@@ -357,37 +458,84 @@ fn main() {
 
     let mut rng = rand::thread_rng();
 
-    // Generate random image
-    let random_image: Vec<Vec<_>> = (0..image_height)
-        .map(|_| {
-            (0..image_width)
-                .map(|_| gen_scalar(rng.gen_range(0..=255)))
+    // // Generate random image
+    // let random_image: Vec<Vec<_>> = (0..image_height)
+    //     .map(|_| {
+    //         (0..image_width)
+    //             .map(|_| gen_scalar(rng.gen_range(0..=255)))
+    //             .collect()
+    //     })
+    //     .collect();
+    // Convert loaded image to Vec<Vec<Fr>>
+    // just use variable name "random_image" but it is not random, it
+    // is loaded from toml
+    let random_image: Vec<Vec<Fr>> = prover_inputs.original_image
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|pixel_str| {
+                    let value: u64 = pixel_str.parse().expect("Failed to parse pixel value");
+                    gen_scalar(value)
+                })
                 .collect()
         })
         .collect();
+    
+    let horizontal_edit_matrix = create_matrix(matrix_type, image_width, true);
+    let vertical_edit_matrix = create_matrix(matrix_type, image_height, false);
 
-    let horizontal_blur_matrix = create_matrix(matrix_type, image_width);
-    let vertical_blur_matrix = create_matrix(matrix_type, image_height);
+    println!("Image dimensions: {} × {} (height × width)", image_height, image_width);
+    println!("Horizontal matrix dimensions: {} × {}", 
+        horizontal_edit_matrix.len(), 
+        horizontal_edit_matrix[0].len()
+    );
+    println!("Vertical matrix dimensions: {} × {}", 
+        vertical_edit_matrix.len(), 
+        vertical_edit_matrix[0].len()
+    );
+    // let horizontal_resize_matrix = create_matrix(matrix_type, image_width);
+    // let vertical_resize_matrix = create_matrix(matrix_type, image_height);
+
+    let bandwidth = match matrix_type {
+        MatrixType::Resizing => 4,
+        MatrixType::GBlur => GBLUR_RADIUS,
+        MatrixType::Tridiagonal => 1,
+    };
 
     // Note: gblurr radius is an upper bound on the kernel radius to speed up the matrix math.
-    let row_wise_blurred_image =
-        matrix_matrix_product_band_left(&vertical_blur_matrix, &random_image, GBLUR_RADIUS);
-    let blurred_image = matrix_matrix_product_band_right(
-        &row_wise_blurred_image,
-        &horizontal_blur_matrix,
-        GBLUR_RADIUS,
-    );
+    let row_wise_edited_image = if matches!(matrix_type, MatrixType::Resizing) {
+        // For resizing, use full multiplication (it's fast enough since matrices are small)
+        matrix_matrix_product(&vertical_edit_matrix, &random_image)
+    } else {
+        // For blur, use band optimization
+        matrix_matrix_product_band_left(
+            &vertical_edit_matrix,
+            &random_image,
+            bandwidth,
+        )
+    };
 
-    let target_middle_image = blurred_image.clone();
-    let edited_image = blurred_image.clone();
+    let edited_image = if matches!(matrix_type, MatrixType::Resizing) {
+        matrix_matrix_product(&row_wise_edited_image, &horizontal_edit_matrix)
+    } else {
+        matrix_matrix_product_band_right(
+            &row_wise_edited_image,
+            &horizontal_edit_matrix,
+            bandwidth,
+        )
+    };
 
-    let r: Vec<_> = (0..image_height).map(|_| gen_rand_scalar()).collect();
+    let target_middle_image = edited_image.clone();
+    let edited_image = edited_image.clone();
 
-    let rTA = vector_matrix_product(&r, &vertical_blur_matrix);
+    let r: Vec<_> = (0..image_height / adjust_factor).map(|_| gen_rand_scalar()).collect();
+    println!("r dimensions: {}", r.len());
 
-    let s: Vec<_> = (0..image_width).map(|_| gen_rand_scalar()).collect();
+    let rTA = vector_matrix_product(&r, &vertical_edit_matrix);
 
-    let As = matrix_vector_product(&horizontal_blur_matrix, &s);
+    let s: Vec<_> = (0..image_width / adjust_factor).map(|_| gen_rand_scalar()).collect();
+
+    let As = matrix_vector_product(&horizontal_edit_matrix, &s);
 
     // Do Freivald's verification for sanity check, etc.
     let rTAI = vector_matrix_product(&rTA, &random_image);

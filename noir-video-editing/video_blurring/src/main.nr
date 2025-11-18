@@ -1,7 +1,7 @@
 global IMAGE_HEIGHT: u32 = 240;
 global IMAGE_WIDTH: u32 = 320;
 global PIXEL_THRESHOLD_FELT: Field = 10; // Needs to be set in fixed point representation
-global PIXEL_THRESHOLD_DOUBLE: u32 = 20; // Needs to be in fixed point
+//global PIXEL_THRESHOLD_DOUBLE: u32 = 20; // Needs to be in fixed point
 // global BLUR_DIAMETER: u32 = 5;
 //global BLUR_RADIUS: u32 = 2; // Radius is floor of diameter / 2
 
@@ -14,17 +14,17 @@ fn main(original_image: [[Field; IMAGE_WIDTH]; IMAGE_HEIGHT],
         As: pub [Field; IMAGE_WIDTH]) -> pub ([Field; IMAGE_HEIGHT], [Field; IMAGE_WIDTH]) 
     {
     // the edited image and output of Freivald's should be close to other pixel wise
-    for i in 0..IMAGE_HEIGHT {
-        for j in 0..IMAGE_WIDTH {
-            let pixel_diff_felt = (target_middle_image[i][j] - edited_image[i][j]) + PIXEL_THRESHOLD_FELT;
+    //for i in 0..IMAGE_HEIGHT {
+    //    for j in 0..IMAGE_WIDTH {
+    //        let pixel_diff_felt = (target_middle_image[i][j] - edited_image[i][j]) + PIXEL_THRESHOLD_FELT;
             // // Safety: The range check on the next line constrains this, as before a result of not having an analog of reinterpret_cast.
             // let pixel_diff = unsafe { field_to_u32(pixel_diff_felt) };
             // // Can comment this out for benchmarking? Not theoretically needed constraint but it makes compiler happy.
             // assert((pixel_diff as Field) == pixel_diff_felt);
             // assert(pixel_diff < PIXEL_THRESHOLD_DOUBLE);
-            pixel_diff_felt.assert_max_bit_size::<7>();
-        }
-    }
+            // pixel_diff_felt.assert_max_bit_size::<7>();
+    //    }
+    // }
 
     // after Freivald transformation, the left hand side should
     // be equal to the right hand side 

@@ -5,13 +5,8 @@ download-ci-llvm = true
 
 [workspace]
 members = [
-  "video-resizing/script",
-  "aggregation/script", "video-signature-verification",
-  "inner-product-proof/program",
-  "inner-product-proof/script",
-  "inner-product-precompile/program",
-  "inner-product-precompile/script"
-, "noir-video-editing/generate_freivalds_inputs"]
+  "noir-video-editing/generate_freivalds_inputs"
+]
 resolver = "2"
 
 [workspace.package]
