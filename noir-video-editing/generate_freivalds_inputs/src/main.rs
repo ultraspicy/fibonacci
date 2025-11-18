@@ -458,11 +458,25 @@ fn main() {
 
     let mut rng = rand::thread_rng();
 
-    // Generate random image
-    let random_image: Vec<Vec<_>> = (0..image_height)
-        .map(|_| {
-            (0..image_width)
-                .map(|_| gen_scalar(rng.gen_range(0..=255)))
+    // // Generate random image
+    // let random_image: Vec<Vec<_>> = (0..image_height)
+    //     .map(|_| {
+    //         (0..image_width)
+    //             .map(|_| gen_scalar(rng.gen_range(0..=255)))
+    //             .collect()
+    //     })
+    //     .collect();
+    // Convert loaded image to Vec<Vec<Fr>>
+    // just use variable name "random_image" but it is not random, it
+    // is loaded from toml
+    let random_image: Vec<Vec<Fr>> = prover_inputs.original_image
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|pixel_str| {
+                    let value: u64 = pixel_str.parse().expect("Failed to parse pixel value");
+                    gen_scalar(value)
+                })
                 .collect()
         })
         .collect();
