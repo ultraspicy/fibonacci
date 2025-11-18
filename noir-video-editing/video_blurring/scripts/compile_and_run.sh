@@ -10,7 +10,7 @@ nargo check --overwrite
 
 # Populate the Prover.toml file with inputs
 # python3 ./scripts/generate_inputs.py
-cargo run --release --manifest-path ../generate_freivalds_inputs/Cargo.toml gblur
+#RUSTFLAGS="-A warnings" cargo run --release --manifest-path ../generate_freivalds_inputs/Cargo.toml gblur
 
 cp ../generate_freivalds_inputs/Prover.toml .
 
