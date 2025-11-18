@@ -15,7 +15,7 @@ cargo run --release --manifest-path ../generate_freivalds_inputs/Cargo.toml gblu
 cp ../generate_freivalds_inputs/Prover.toml .
 
 # Generate a witness
-nargo execute
+nargo execute > /dev/null 2>&1
 
 # Generate a VK (need to do this separately for accurate performance numbers)
 bb write_vk -b ./target/video_blurring.json -o ./target
