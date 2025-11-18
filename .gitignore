@@ -3,6 +3,7 @@
 *.ipynb_checkpoints*
 /demo/frames/
 /demo/decomposed_frames/
+/demo/trimmed_decomposed_frames/
 /demo/demo-117s-large.mp4
 *__pycache__*
 /target

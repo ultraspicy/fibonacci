@@ -1,10 +1,3 @@
-// Register eq(x,r) polynomial
-// Register v(x) polynomial (mask).
-// Register m(x) polynomial (message).
-// Register r(x) polynomial (revealed).
-// Zero-check m(x)*v(x) - r(x) over boolean hypercube
-// Equivalent to (m(x)*v(x) - r(x))*eq(r,x) over boolean hypercube. Use one variant of the build_eq_x_r function
-
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{self, BufRead};
@@ -85,19 +78,19 @@ fn seeded_rng() -> impl Rng {
 fn main() -> io::Result<()> {
     let file_io_start = Instant::now();
     // Define image vector/properties.
-    let frame_size: usize = (240 * 320);
-    let num_frames = 47;
+    let frame_size: usize = (720 * 1280);
+    let num_frames = 25 * 10; // 10 frames at 25 fps
     let video_size = num_frames * frame_size / 2;
     let num_vars = log2(video_size) as usize; // goldilocks can store 2 pixels per felt!
     let poly_size = 1 << num_vars;
 
     // Python style indexing where end isn't inclusive. Also FFMPEG decomposes frames in a
     // 1-indexed way.
-    let segment_start: usize = 10 - 1;
-    let segment_end: usize = 41 - 1;
+    let segment_start: usize = 2 - 1;
+    let segment_end: usize = 240 - 1;
 
     // Read full video for the signature part.
-    let dir_path = "decomposed_frames";
+    let dir_path = "../demo/decomposed_frames";
     let mut signer_frames: BTreeMap<u32, Vec<Vec<u8>>> = BTreeMap::new();
 
     let entries = fs::read_dir(dir_path)?;
@@ -107,17 +100,19 @@ fn main() -> io::Result<()> {
         let file_name = entry.file_name().into_string().unwrap();
 
         if let Some((frame_number, channel)) = parse_filename(&file_name) {
-            let file_path = entry.path();
-            let content = read_file_as_vec(&file_path)?;
+            if (frame_number as usize) <= num_frames {
+                let file_path = entry.path();
+                let content = read_file_as_vec(&file_path)?;
 
-            let frame = signer_frames
-                .entry(frame_number)
-                .or_insert_with(|| vec![vec![], vec![], vec![]]);
-            match channel {
-                'B' => frame[0] = content,
-                'G' => frame[1] = content,
-                'R' => frame[2] = content,
-                _ => (),
+                let frame = signer_frames
+                    .entry(frame_number)
+                    .or_insert_with(|| vec![vec![], vec![], vec![]]);
+                match channel {
+                    'B' => frame[0] = content,
+                    'G' => frame[1] = content,
+                    'R' => frame[2] = content,
+                    _ => (),
+                }
             }
         }
     }
@@ -313,10 +308,10 @@ fn main() -> io::Result<()> {
     let revealed_poly: ArcMultilinearExtension<_> = revealed_rmm.to_mles::<E>().remove(0).into();
     let revealed_poly_eval = revealed_poly.evaluate(&sumcheck_r);
 
-    println!(
-        "Inferred eval {:?}",
-        eval * mask_poly_eval * eq_x_r_eval - revealed_poly_eval * eq_x_r_eval
-    );
+    // println!(
+    //     "Inferred eval {:?}",
+    //     eval * mask_poly_eval * eq_x_r_eval - revealed_poly_eval * eq_x_r_eval
+    // );
 
     let verify_duration = verify_start.elapsed();
     println!("Verification of opening took: {:?}", verify_duration);

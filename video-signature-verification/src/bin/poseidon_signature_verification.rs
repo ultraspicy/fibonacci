@@ -777,7 +777,7 @@ fn main() {
     let mut native_sponge = PoseidonSponge::<Fr>::new(&sponge_params);
     native_sponge.absorb(&absorb);
     let hash = native_sponge.squeeze_native_field_elements(1);
-    println!("Native Hash {:?}", hash);
+    // println!("Native Hash {:?}", hash);
 
     let c = AbsorbCircuit::<Fr>::new(absorb.clone(), hash[0]);
     {
@@ -785,6 +785,10 @@ fn main() {
         let mut cs = ConstraintSystem::new_ref();
         circuit.generate_constraints(cs.clone());
         println!("Num constraints: {:?}", cs.num_constraints());
+        println!(
+            "Constraints per field element: {:?}",
+            cs.num_constraints() / LENGTH
+        );
     }
 
     let mut rng = ark_std::rand::rngs::StdRng::seed_from_u64(test_rng().next_u64());

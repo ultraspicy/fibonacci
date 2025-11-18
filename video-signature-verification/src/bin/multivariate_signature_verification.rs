@@ -164,6 +164,10 @@ fn main() {
         circuit.generate_constraints(1, &mut cs).unwrap();
         // assert!(cs.is_satisfied().unwrap());
         println!("Num constraints: {:?}", cs.num_constraints());
+        println!(
+            "Constraints per byte: {:?}",
+            cs.num_constraints() as f64 / MESSAGE_LENGTH as f64
+        );
     }
 
     // Generate the proving key

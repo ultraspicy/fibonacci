@@ -190,6 +190,10 @@ fn main() {
         circuit.generate_constraints(1, &mut cs).unwrap();
         // assert!(cs.is_satisfied().unwrap());
         println!("Num constraints: {:?}", cs.num_constraints());
+        println!(
+            "Constraints per field element: {:?}",
+            cs.num_constraints() / MESSAGE_LENGTH
+        );
     }
 
     // Generate the proving key

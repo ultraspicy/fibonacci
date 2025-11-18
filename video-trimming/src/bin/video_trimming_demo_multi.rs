@@ -70,28 +70,31 @@ fn seeded_rng() -> impl Rng {
 fn main() -> io::Result<()> {
     let file_io_start = Instant::now();
     // Define image vector/properties.
-    let frame_size: usize = (240 * 320);
+    let frame_size: usize = (720 * 1280);
     let m = log2(frame_size / 2) as usize; // goldilocks can store 2 pixels per felt!
-    let num_frames = 47;
+    let num_frames = 25 * 10;
     let n = log2(num_frames) as usize;
     let num_vars = m + n;
     let poly_size = 1 << num_vars;
     let video_size = num_frames * frame_size;
 
-    // List of "compact ranges" (as in Meiklejohn paper) to redact.
+    // List of "compact ranges" (as in Meiklejohn paper) to prove inclusion of.
     // Tuples of form block_size, block_num (block_num is at that resolution, so there would be 50 blocks of size 1, 25 of size 2, etc. when there are 50 frames)
+    // This was the old approach for proving multiple frames, we are not doing it this way anymore after
+    // realizing the approach in `sumcheck_redactable_signatures.rs` is a lot vbetter for intervals.
     let ranges_to_redact = vec![
-        (1, 9),  // Frame 9
-        (2, 5),  // Frames 10-11
-        (4, 3),  // Frames 12-15
-        (16, 1), // Frames 16-31
-        (8, 4),  // Frames 32-39
-        (1, 40), // Frame 40
+        (1, 3),
+        // (1, 9), // Frame 9
+        // (2, 5),  // Frames 10-11
+        // (4, 3),  // Frames 12-15
+        // (16, 1), // Frames 16-31
+        // (8, 4),  // Frames 32-39
+        // (1, 40), // Frame 40
     ]; // Set to (1,9) for a single frame
     let num_ranges = ranges_to_redact.len();
 
     // Read full video for the signature part.
-    let dir_path = "decomposed_frames";
+    let dir_path = "../demo/decomposed_frames";
     let mut signer_frames: BTreeMap<u32, Vec<Vec<u8>>> = BTreeMap::new();
 
     let entries = fs::read_dir(dir_path)?;
@@ -101,17 +104,19 @@ fn main() -> io::Result<()> {
         let file_name = entry.file_name().into_string().unwrap();
 
         if let Some((frame_number, channel)) = parse_filename(&file_name) {
-            let file_path = entry.path();
-            let content = read_file_as_vec(&file_path)?;
+            if (frame_number as usize) <= num_frames {
+                let file_path = entry.path();
+                let content = read_file_as_vec(&file_path)?;
 
-            let frame = signer_frames
-                .entry(frame_number)
-                .or_insert_with(|| vec![vec![], vec![], vec![]]);
-            match channel {
-                'B' => frame[0] = content,
-                'G' => frame[1] = content,
-                'R' => frame[2] = content,
-                _ => (),
+                let frame = signer_frames
+                    .entry(frame_number)
+                    .or_insert_with(|| vec![vec![], vec![], vec![]]);
+                match channel {
+                    'B' => frame[0] = content,
+                    'G' => frame[1] = content,
+                    'R' => frame[2] = content,
+                    _ => (),
+                }
             }
         }
     }
@@ -158,7 +163,7 @@ fn main() -> io::Result<()> {
 
     let comm = Pcs::batch_commit_and_write(&pp, rmms, &mut transcript).unwrap();
     let commit_duration = commit_start.elapsed();
-    println!("Gen commitment took: {:?}", commit_duration);
+    println!("Gen commitment (plain) took: {:?}", commit_duration);
 
     let opening_proof_start = Instant::now();
 
@@ -246,8 +251,11 @@ fn main() -> io::Result<()> {
         let frame_poly: ArcMultilinearExtension<_> =
             frame_rmm.to_mles::<GoldilocksExt2>().remove(0).into();
         let eval2 = frame_poly.evaluate(&point.as_slice()[0..(m + log_block_size)]);
-        println!("Eval of polynomial the regular way is: {:?}", evals[idx]);
-        println!("Eval of polynomial via interpolation is: {:?}", eval2);
+        // println!("Eval of polynomial the regular way is: {:?}", evals[idx]);
+        // println!("Eval of polynomial via interpolation is: {:?}", eval2);
+        if (evals[idx][0] != eval2) {
+            panic!("Signature verification failed!");
+        }
         idx += 1;
     }
 
