@@ -104,7 +104,7 @@ fn main() -> io::Result<()> {
         let file_name = entry.file_name().into_string().unwrap();
 
         if let Some((frame_number, channel)) = parse_filename(&file_name) {
-            if (frame_number as usize) <= num_frames {
+            if (frame_number as usize) <= num_frames && (frame_number as usize) > 0 {
                 let file_path = entry.path();
                 let content = read_file_as_vec(&file_path)?;
 

@@ -103,10 +103,10 @@ fn main() -> io::Result<()> {
     // Python-style [start, end) indices over 0-based frame indices.
     // ffmpeg frames are 1-based.
     let segment_start: usize = 2 - 1;
-    let segment_end: usize = if opt.use_long_segment { 24 - 1 } else { 3 - 1 };
+    let segment_end: usize = if opt.use_long_segment { 240 - 1 } else { 3 - 1 };
     let segment_frames: usize = segment_end - segment_start;
 
-    let num_frames = 25; // Total number of frames in the *full* video.
+    let num_frames = 25 * 10; // Total number of frames in the *full* video.
     let video_size = num_frames * frame_size;
     let log_n = log2(video_size); // ark_std::log2 is ceil-log2; 1 << log_n is a power of two ≥ video_size.
 
@@ -121,7 +121,7 @@ fn main() -> io::Result<()> {
         let file_name = entry.file_name().into_string().unwrap();
 
         if let Some((frame_number, channel)) = parse_filename(&file_name) {
-            if (frame_number as usize) <= num_frames {
+            if (frame_number as usize) <= num_frames && (frame_number as usize) > 0 {
                 // ffmpeg 1-indexes frames
                 let file_path = entry.path();
                 let content = read_file_as_vec(&file_path)?;

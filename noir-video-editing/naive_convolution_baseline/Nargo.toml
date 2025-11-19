@@ -1,0 +1,6 @@
+[package]
+name = "naive_convolution_baseline"
+type = "bin"
+authors = [""]
+
+[dependencies]

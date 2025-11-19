@@ -20,3 +20,6 @@ cargo run --release --bin video_trimming_demo --
 
 echo -e "\033[0;32m===== Running univariate one-frame benchmarks =====\033[0m"
 cargo run --release --bin video_trimming_demo -- --use-long-segment
+
+echo -e "\033[0;32m===== Running Merkle Tree benchmarks =====\033[0m"
+cargo run --release --bin merkle_tree_trimming

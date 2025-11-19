@@ -17,6 +17,8 @@
 /noir-video-editing/*/target/
 /noir-video-editing/*/Prover.toml/
 
+video_representation_experiments/downloaded_videos/*
+
 video-resizing-freivalds/init/config.json
 video-resizing-freivalds/script/config.json
 video-resizing-freivalds/verifier/config.json
