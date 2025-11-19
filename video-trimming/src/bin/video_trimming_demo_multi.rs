@@ -94,7 +94,7 @@ fn main() -> io::Result<()> {
     let num_ranges = ranges_to_redact.len();
 
     // Read full video for the signature part.
-    let dir_path = "../demo/decomposed_frames";
+    let dir_path = "../noir-video-editing/video_decompose_script/outputs/matrix_files";
     let mut signer_frames: BTreeMap<u32, Vec<Vec<u8>>> = BTreeMap::new();
 
     let entries = fs::read_dir(dir_path)?;
