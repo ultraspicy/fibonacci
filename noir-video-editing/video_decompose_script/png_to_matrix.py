@@ -8,77 +8,101 @@ def read_png(image_path):
     matrix = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
     if matrix is None:
         raise ValueError(f"Could not read image: {image_path}")
-    print(f"Loaded: {Path(image_path).name} - Shape: {matrix.shape}")
     return matrix
 
-def read_directory(directory_path):
-    """Read all PNGs from directory and return as list of matrices."""
-    files = sorted(Path(directory_path).glob('*.png'))
-    matrices = []
-    
-    print(f"Reading {len(files)} files from {directory_path}...")
-    
-    for file_path in files:
-        matrix = read_png(file_path)
-        matrices.append(matrix)
-    
-    print(f"Total loaded: {len(matrices)} images")
-    return matrices
-
-def read_as_array(directory_path):
-    """Read all PNGs and stack into 3D array (n_images, height, width)."""
-    matrices = read_directory(directory_path)
-    array_3d = np.stack(matrices, axis=0)
-    print(f"3D array shape: {array_3d.shape} (n_images, height, width)")
-    return array_3d
-
-def serialize_to_separate_files(array_3d, output_dir, as_strings=True):
+def serialize_image_to_file(image_path, output_path, index, as_strings=True):
     """
-    Serialize each image in 3D array to separate JSON files.
+    Read a single image and serialize it to a JSON file.
     
     Args:
-        array_3d: numpy array of shape (n_images, height, width)
+        image_path: Path to input PNG file
+        output_path: Path to output JSON file
+        index: Image index number
+        as_strings: if True, convert pixel values to strings (for ZKP)
+    
+    Returns:
+        Size of the created JSON file in bytes
+    """
+    # Read the image
+    image = read_png(image_path)
+    
+    # Convert to list and optionally stringify
+    if as_strings:
+        data = [[str(pixel) for pixel in row] for row in image]
+    else:
+        data = image.tolist()
+    
+    # Create metadata for this image
+    json_data = {
+        "index": index,
+        "shape": list(image.shape),
+        "dtype": str(image.dtype),
+        "data": data
+    }
+    
+    # Save to JSON file
+    with open(output_path, 'w') as f:
+        json.dump(json_data, f, indent=2)
+    
+    return output_path.stat().st_size
+
+def serialize_directory_streaming(input_dir, output_dir, as_strings=True):
+    """
+    Serialize all PNGs in directory to separate JSON files.
+    Processes one image at a time to minimize memory usage.
+    
+    Args:
+        input_dir: directory containing PNG files
         output_dir: directory to save JSON files
         as_strings: if True, convert pixel values to strings (for ZKP)
     """
+    input_path = Path(input_dir)
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
+    # Get all PNG files, sorted
+    png_files = sorted(input_path.glob('*.png'))
+    
+    if not png_files:
+        raise ValueError(f"No PNG files found in {input_dir}")
+    
+    num_images = len(png_files)
     total_size = 0
-    num_images = array_3d.shape[0]
     
-    print(f"\nSerializing {num_images} images to separate JSON files...")
+    print(f"Found {num_images} PNG files in {input_dir}")
+    print(f"Processing one at a time to minimize memory usage...\n")
     
-    for i, image in enumerate(array_3d):
-        # Convert to list and optionally stringify
-        if as_strings:
-            data = [[str(pixel) for pixel in row] for row in image]
-        else:
-            data = image.tolist()
+    for i, png_file in enumerate(png_files):
+        # Process this single image
+        output_file = output_path / f"image_{i:04d}.json"
         
-        # Create metadata for this image
-        json_data = {
-            "index": i,
-            "shape": list(image.shape),
-            "dtype": str(array_3d.dtype),
-            "data": data
-        }
-        
-        # Save to individual JSON file
-        file_path = output_path / f"image_{i:04d}.json"
-        with open(file_path, 'w') as f:
-            json.dump(json_data, f, indent=2)
-        
-        file_size = file_path.stat().st_size
-        total_size += file_size
-        
-        if (i + 1) % 10 == 0 or i == num_images - 1:
-            print(f"Progress: {i + 1}/{num_images} files written")
+        try:
+            file_size = serialize_image_to_file(
+                image_path=png_file,
+                output_path=output_file,
+                index=i,
+                as_strings=as_strings
+            )
+            
+            total_size += file_size
+            
+            # Progress update
+            if (i + 1) % 10 == 0 or i == num_images - 1:
+                print(f"Progress: {i + 1}/{num_images} files processed "
+                      f"({((i + 1) / num_images * 100):.1f}%)")
+                
+        except Exception as e:
+            print(f"Error processing {png_file}: {e}")
+            continue
     
+    # Final statistics
     total_size_mb = total_size / (1024 * 1024)
     avg_size_kb = (total_size / num_images) / 1024
     
-    print(f"\nSerialization complete!")
+    print(f"\n{'='*60}")
+    print(f"Serialization complete!")
+    print(f"{'='*60}")
+    print(f"Input directory: {input_path}")
     print(f"Output directory: {output_path}")
     print(f"Total files: {num_images}")
     print(f"Total size: {total_size_mb:.2f} MB")
@@ -128,27 +152,45 @@ def deserialize_from_separate_files(input_dir, as_array=True):
         return images
 
 
-if __name__ == '__main__':
+def process_channel(channel):
+    """
+    Process a single channel (R, G, or B).
     
-    channel_dir = './outputs/video_decomposition/rgb_channels/channel_R'
-    output_dir = './outputs/channel_R_json_files'
+    Args:
+        channel: Channel identifier ('R', 'G', or 'B')
+    """
+    channel_dir = f'./outputs/video_decomposition/rgb_channels/channel_{channel}'
+    output_dir = f'./outputs/channel_{channel}_json_files'
+    
+    print(f"\n{'='*60}")
+    print(f"Processing Channel: {channel}")
+    print(f"{'='*60}\n")
     
     if Path(channel_dir).exists():
-        # Read and serialize
-        array_3d = read_as_array(channel_dir)
-        print(f"Array dimensions: {array_3d.shape[0]} images of {array_3d.shape[1]}x{array_3d.shape[2]} pixels")
+        # Serialize using streaming approach (one image at a time)
+        serialize_directory_streaming(channel_dir, output_dir, as_strings=True)
         
-        # Serialize to separate JSON files
-        serialize_to_separate_files(array_3d, output_dir, as_strings=True)
-        
-        print("\n--- Loading back from JSON files ---")
+        print(f"\n--- Verifying Channel {channel}: Loading back from JSON files ---")
         # Load it back and print size
         loaded_array = deserialize_from_separate_files(output_dir)
         
         # Additional size information
         print(f"Total elements: {loaded_array.size:,}")
-        print(f"Shape breakdown: {loaded_array.shape[0]} frames × {loaded_array.shape[1]} height × {loaded_array.shape[2]} width")
+        print(f"Shape breakdown: {loaded_array.shape[0]} frames × "
+              f"{loaded_array.shape[1]} height × {loaded_array.shape[2]} width")
         
     else:
         print(f"Directory not found: {channel_dir}")
         print("Please run the video decomposer first to generate images.")
+
+
+if __name__ == '__main__':
+    # Process all three channels
+    channels = ['R', 'G', 'B']
+    
+    for channel in channels:
+        process_channel(channel)
+    
+    print(f"\n{'='*60}")
+    print("✨ All channels processed!")
+    print(f"{'='*60}")
