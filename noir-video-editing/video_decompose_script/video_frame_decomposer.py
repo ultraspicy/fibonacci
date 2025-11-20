@@ -210,7 +210,7 @@ class VideoFrameDecomposer:
 
 def main():
     # Configuration
-    video_path = 'short_video.mp4'
+    video_path = 'video.mp4'
     output_dir = './outputs/video_decomposition'
     
     print("="*60)
