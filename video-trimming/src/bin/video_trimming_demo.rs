@@ -111,7 +111,7 @@ fn main() -> io::Result<()> {
     let log_n = log2(video_size); // ark_std::log2 is ceil-log2; 1 << log_n is a power of two ≥ video_size.
 
     // Read full video for the signer side.
-    let dir_path = "../demo/decomposed_frames";
+    let dir_path = "../noir-video-editing/video_decompose_script/outputs/matrix_files";
     let mut signer_frames: BTreeMap<u32, Vec<Vec<u8>>> = BTreeMap::new();
 
     let entries = fs::read_dir(dir_path)?;
@@ -311,7 +311,7 @@ fn main() -> io::Result<()> {
     // ==== Verification side: read trimmed video and build segment polynomial F ====
 
     let verification_read_start = Instant::now();
-    let dir_path = "../demo/decomposed_frames";
+    let dir_path = "../noir-video-editing/video_decompose_script/outputs/matrix_files";
     let mut verifier_frames: BTreeMap<u32, Vec<Vec<u8>>> = BTreeMap::new();
 
     let entries = fs::read_dir(dir_path)?;

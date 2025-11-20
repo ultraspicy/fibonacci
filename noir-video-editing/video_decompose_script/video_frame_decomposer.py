@@ -55,24 +55,24 @@ class VideoFrameDecomposer:
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
         # Split into channels
-        r_channel = rgb_frame[:, :, 0]
-        g_channel = rgb_frame[:, :, 1]
-        b_channel = rgb_frame[:, :, 2]
+        r_channel = rgb_frame[:, :, 0] # Red channel
+        g_channel = rgb_frame[:, :, 1] # Green channel
+        b_channel = rgb_frame[:, :, 2] # Blue channel
         
-        prefix = 'key' if is_keyframe else 'frame'
+        prefix = 'output' #'key' if is_keyframe else 'frame'
         
         # Save each channel as grayscale image
-        cv2.imwrite(str(self.rgb_dir / f'channel_R/{prefix}_{frame_idx:06d}_R.png'), r_channel)
-        cv2.imwrite(str(self.rgb_dir / f'channel_G/{prefix}_{frame_idx:06d}_G.png'), g_channel)
-        cv2.imwrite(str(self.rgb_dir / f'channel_B/{prefix}_{frame_idx:06d}_B.png'), b_channel)
+        cv2.imwrite(str(self.rgb_dir / f'channel_R/{prefix}_{frame_idx:04d}_R.png'), r_channel)
+        cv2.imwrite(str(self.rgb_dir / f'channel_G/{prefix}_{frame_idx:04d}_G.png'), g_channel)
+        cv2.imwrite(str(self.rgb_dir / f'channel_B/{prefix}_{frame_idx:04d}_B.png'), b_channel)
         
-        # Also save a visualization with all channels side by side
-        combined = np.hstack([
-            cv2.cvtColor(r_channel, cv2.COLOR_GRAY2BGR),
-            cv2.cvtColor(g_channel, cv2.COLOR_GRAY2BGR),
-            cv2.cvtColor(b_channel, cv2.COLOR_GRAY2BGR)
-        ])
-        cv2.imwrite(str(self.rgb_dir / f'{prefix}_{frame_idx:06d}_RGB_split.png'), combined)
+        # # Also save a visualization with all channels side by side
+        # combined = np.hstack([
+        #     cv2.cvtColor(r_channel, cv2.COLOR_GRAY2BGR),
+        #     cv2.cvtColor(g_channel, cv2.COLOR_GRAY2BGR),
+        #     cv2.cvtColor(b_channel, cv2.COLOR_GRAY2BGR)
+        # ])
+        # cv2.imwrite(str(self.rgb_dir / f'{prefix}_{frame_idx:04d}_RGB_split.png'), combined)
     
     def decompose(self, max_frames=None, keyframe_interval=None, sample_rate=1):
         """
@@ -155,7 +155,7 @@ class VideoFrameDecomposer:
                 
                 # Compute and save delta frame
                 delta_frame = cv2.absdiff(prev_frame, frame)
-                delta_filename = self.delta_dir / f'delta_{frame_idx:06d}.png'
+                delta_filename = self.delta_dir / f'delta_{frame_idx:04d}.png'
                 cv2.imwrite(str(delta_filename), delta_frame)
                 delta_count += 1
                 stats['delta_frames'].append({
@@ -166,7 +166,7 @@ class VideoFrameDecomposer:
             
             # Save keyframe if detected
             if is_keyframe:
-                keyframe_filename = self.keyframes_dir / f'keyframe_{frame_idx:06d}.png'
+                keyframe_filename = self.keyframes_dir / f'keyframe_{frame_idx:04d}.png'
                 cv2.imwrite(str(keyframe_filename), frame)
                 keyframe_count += 1
                 stats['keyframes'].append({
@@ -175,9 +175,8 @@ class VideoFrameDecomposer:
                 })
                 print(f"Keyframe detected at frame {frame_idx} ({frame_idx/fps:.2f}s)")
             
-            # Save RGB channels (for demonstration, save for keyframes and some regular frames)
-            if is_keyframe or processed_count < 5:
-                self.save_rgb_channels(frame, frame_idx, is_keyframe)
+            
+            self.save_rgb_channels(frame, frame_idx, is_keyframe)
             
             prev_frame = frame.copy()
             frame_idx += 1
@@ -211,7 +210,7 @@ class VideoFrameDecomposer:
 
 def main():
     # Configuration
-    video_path = 'short_video.mp4'
+    video_path = 'video.mp4'
     output_dir = './outputs/video_decomposition'
     
     print("="*60)
@@ -226,12 +225,10 @@ def main():
         threshold=30.0  # Adjust this to control keyframe sensitivity
     )
     
-    # Process every 5th frame to create a manageable sample
-    # For full processing, set sample_rate=1
     stats = decomposer.decompose(
-        max_frames=200,  # Process 200 sampled frames
-        keyframe_interval=None,  # Automatic keyframe detection
-        sample_rate=5  # Process every 5th frame
+        max_frames=20000, 
+        keyframe_interval=None, 
+        sample_rate=1  
     )
     
     print("\n" + "="*60)
