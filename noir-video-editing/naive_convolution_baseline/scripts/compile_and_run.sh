@@ -9,24 +9,24 @@ echo -e "\033[0;32m===== Setting Up Proofs =====\033[0m"
 nargo check --overwrite
 
 # Populate the Prover.toml file with inputs
-# python3 ./scripts/generate_inputs.py
+python3 ./scripts/generate_inputs.py
 #RUSTFLAGS="-A warnings" cargo run --release --manifest-path ../generate_freivalds_inputs/Cargo.toml gblur
 
-cp ../generate_freivalds_inputs/Prover.toml .
+# cp ../generate_freivalds_inputs/Prover.toml .
 
 # Generate a witness
-nargo execute > /dev/null 2>&1
+nargo execute
 
 # Generate a VK (need to do this separately for accurate performance numbers)
-bb write_vk -b ./target/video_blurring.json -o ./target
+bb write_vk -b ./target/naive_convolution_baseline.json -o ./target
 
 echo -e "\033[0;32m===== Generating Gate Counts =====\033[0m"
 # Generate gate count
-bb gates -b ./target/video_blurring.json
+bb gates -b ./target/naive_convolution_baseline.json
 
 echo -e "\033[0;32m===== Timing Proof Generation =====\033[0m"
 # Actually compute the proof
-time bb prove -b ./target/video_blurring.json -w ./target/video_blurring.gz -o ./target --vk_path ./target/vk
+time bb prove -b ./target/naive_convolution_baseline.json -w ./target/naive_convolution_baseline.gz -o ./target --vk_path ./target/vk
 
 echo -e "\033[0;32m===== Timing verification =====\033[0m"
 # Verify the proof
