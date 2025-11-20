@@ -4,7 +4,7 @@ change-id = 129295
 download-ci-llvm = true
 
 [workspace]
-members = [
+members = ["noir-video-editing/freivalds_vector_generator",
   "noir-video-editing/generate_freivalds_inputs"
 ]
 resolver = "2"
