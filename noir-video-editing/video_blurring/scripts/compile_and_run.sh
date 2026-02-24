@@ -6,7 +6,7 @@
 
 echo -e "\033[0;32m===== Setting Up Proofs =====\033[0m"
 # Produce the empty Prover.toml file
-nargo check --overwrite
+time nargo check --overwrite
 
 # Populate the Prover.toml file with inputs
 # python3 ./scripts/generate_inputs.py
@@ -18,7 +18,7 @@ cp ../generate_freivalds_inputs/Prover.toml .
 nargo execute > /dev/null 2>&1
 
 # Generate a VK (need to do this separately for accurate performance numbers)
-bb write_vk -b ./target/video_blurring.json -o ./target
+time bb write_vk -b ./target/video_blurring.json -o ./target
 
 echo -e "\033[0;32m===== Generating Gate Counts =====\033[0m"
 # Generate gate count
