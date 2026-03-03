@@ -1,5 +1,5 @@
-global IMAGE_HEIGHT: u32 = 240;
-global IMAGE_WIDTH: u32 = 320;
+global IMAGE_HEIGHT: u32 = 720;
+global IMAGE_WIDTH: u32 = 1280;
 global PIXEL_THRESHOLD_FELT: Field = 10; // Needs to be set in fixed point representation
 global PIXEL_THRESHOLD_DOUBLE: u32 = 20; // Needs to be in fixed point
 // global BLUR_DIAMETER: u32 = 5;

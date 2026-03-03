@@ -18,7 +18,7 @@ cp ../generate_freivalds_inputs/Prover.toml .
 nargo execute > /dev/null 2>&1
 
 # Generate a VK (need to do this separately for accurate performance numbers)
-time bb write_vk -b ./target/video_blurring.json -o ./target
+time bb write_vk -b ./target/video_blurring.json -o ./target -c $HOME/.bb-crs
 
 echo -e "\033[0;32m===== Generating Gate Counts =====\033[0m"
 # Generate gate count
@@ -26,8 +26,8 @@ bb gates -b ./target/video_blurring.json
 
 echo -e "\033[0;32m===== Timing Proof Generation =====\033[0m"
 # Actually compute the proof
-time bb prove -b ./target/video_blurring.json -w ./target/video_blurring.gz -o ./target --vk_path ./target/vk
+time bb prove -b ./target/video_blurring.json -w ./target/video_blurring.gz -o ./target --vk_path ./target/vk -c $HOME/.bb-crs
 
 echo -e "\033[0;32m===== Timing verification =====\033[0m"
 # Verify the proof
-time bb verify -p ./target/proof -k ./target/vk
+time bb verify -p ./target/proof -k ./target/vk -c $HOME/.bb-crs
