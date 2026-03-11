@@ -31,8 +31,6 @@ def main():
     s = [str(random.randint(0, bn128_scalar_modulus - 1)) for _ in range(image_width)]
     As = s.copy()
 
-
-
     prover_inputs['original_image'] = random_image
     prover_inputs['target_middle_image'] = target_middle_image
     prover_inputs['edited_image'] = edited_image
