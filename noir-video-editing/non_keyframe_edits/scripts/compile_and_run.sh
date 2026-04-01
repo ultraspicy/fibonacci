@@ -26,7 +26,9 @@ fi
 
 # Pre-load large files into OS page cache to reduce I/O latency
 echo -e "\033[0;32m===== Pre-loading Files into Page Cache =====\033[0m"
-"$VMTOUCH" -t ./target/non_keyframe_edits.json $HOME/.bb-crs/bn254_g1.dat
+# "$VMTOUCH" ./target/non_keyframe_edits.json $HOME/.bb-crs/bn254_g1.dat
+cat ./target/non_keyframe_edits.json > /dev/null
+cat $HOME/.bb-crs/bn254_g1.dat > /dev/null
 
 echo -e "\033[0;32m===== Timing Proof Generation =====\033[0m"
 # Compute the proof using precomputed VK (proving key computed once per run)

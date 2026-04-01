@@ -34,8 +34,8 @@ echo -e "\033[0;32m===== Pre-loading Files into Page Cache =====\033[0m"
 echo -e "\033[0;32m===== Timing Proof Generation =====\033[0m"
 # Compute the proof using precomputed VK (proving key computed once per run)
 # --disable_zk removes zero-knowledge overhead (safe for benchmarking)
-time bb prove -b ./target/video_blurring.json -w ./target/video_blurring.gz -o ./target --vk_path ./target/vk -c $HOME/.bb-crs --disable_zk
+time bb prove -b ./target/video_blurring.json -w ./target/video_blurring.gz -o ./target --vk_path ./target/vk -c $HOME/.bb-crs #--disable_zk
 
 echo -e "\033[0;32m===== Timing verification =====\033[0m"
 # Verify the proof
-time bb verify -p ./target/proof -k ./target/vk -c $HOME/.bb-crs --disable_zk
+time bb verify -p ./target/proof -k ./target/vk -c $HOME/.bb-crs #--disable_zk
