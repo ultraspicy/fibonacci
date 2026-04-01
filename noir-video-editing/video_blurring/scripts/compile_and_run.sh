@@ -38,4 +38,5 @@ time bb prove -b ./target/video_blurring.json -w ./target/video_blurring.gz -o .
 
 echo -e "\033[0;32m===== Timing verification =====\033[0m"
 # Verify the proof
-time bb verify -p ./target/proof -k ./target/vk -c $HOME/.bb-crs #--disable_zk
+# -i is public input path flag
+time bb verify -p ./target/proof -k ./target/vk -i ./target/public_inputs -c $HOME/.bb-crs #--disable_zk

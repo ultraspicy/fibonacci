@@ -1,6 +1,6 @@
 use ark_bn254::Fr;
 use ark_ff::Field;
-use ark_ff::{One, Zero};
+use ark_ff::{BigInteger, One, PrimeField, Zero};
 use rand::Rng;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -303,6 +303,51 @@ fn create_resize_matrix_impl(src_size: usize, dst_size: usize) -> Vec<Vec<Fr>> {
     matrix
 }
 
+// Returns true if |target - edited| < threshold (in canonical integer sense).
+// Works by checking if (target - edited) is a small positive or small negative
+// field element, i.e. its canonical representation is ≤ threshold or
+// the canonical representation of (edited - target) is ≤ threshold.
+fn diff_within_threshold(target: Fr, edited: Fr, threshold: u64) -> bool {
+    let diff = target - edited;
+    if diff.is_zero() {
+        return true;
+    }
+    let repr = diff.into_bigint();
+    // Small positive: upper limbs are 0 and lowest limb ≤ threshold
+    if repr.0[1] == 0 && repr.0[2] == 0 && repr.0[3] == 0 && repr.0[0] <= threshold {
+        return true;
+    }
+    // Small negative: check (-diff) the same way
+    let neg_repr = (-diff).into_bigint();
+    neg_repr.0[1] == 0 && neg_repr.0[2] == 0 && neg_repr.0[3] == 0 && neg_repr.0[0] <= threshold
+}
+
+// For each pixel where |target - edited| is within threshold, set edited = target
+// (making the diff exactly 0). This produces a sparse diff matrix which enables
+// sparse matrix batching optimisations in the prover.
+fn snap_to_target(
+    target: &[Vec<Fr>],
+    edited: &mut Vec<Vec<Fr>>,
+    threshold: u64,
+) {
+    let mut snapped = 0usize;
+    let total = target.len() * target[0].len();
+    for i in 0..target.len() {
+        for j in 0..target[i].len() {
+            if diff_within_threshold(target[i][j], edited[i][j], threshold) {
+                edited[i][j] = target[i][j];
+                snapped += 1;
+            }
+        }
+    }
+    println!(
+        "Snapped {}/{} pixels to zero diff ({:.1}% sparse)",
+        snapped,
+        total,
+        100.0 * snapped as f64 / total as f64
+    );
+}
+
 fn transpose(matrix: Vec<Vec<Fr>>) -> Vec<Vec<Fr>> {
     let rows = matrix.len();
     if rows == 0 {
@@ -526,7 +571,31 @@ fn main() {
     };
 
     let target_middle_image = edited_image.clone();
-    let edited_image = edited_image.clone();
+
+    // If the input Prover.toml already contains an actual edited image (e.g. the
+    // real video output from a codec/pipeline), load it and snap small pixel
+    // differences to 0 so the diff matrix is sparse. Otherwise fall back to the
+    // computed blur (current behaviour: diff is trivially 0).
+    let mut edited_image = if prover_inputs.edited_image.is_empty() {
+        edited_image.clone()
+    } else {
+        prover_inputs.edited_image
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|pixel_str| {
+                        let value: u64 = pixel_str.parse().expect("Failed to parse edited pixel");
+                        gen_scalar(value)
+                    })
+                    .collect()
+            })
+            .collect()
+    };
+
+    // Snap pixels within threshold to make the diff matrix sparse.
+    // Threshold must be < PIXEL_THRESHOLD_FELT in the Noir circuit (currently 10).
+    let snap_threshold: u64 = 9;
+    snap_to_target(&target_middle_image, &mut edited_image, snap_threshold);
 
     let r: Vec<_> = (0..image_height / adjust_factor).map(|_| gen_rand_scalar()).collect();
     println!("r dimensions: {}", r.len());
