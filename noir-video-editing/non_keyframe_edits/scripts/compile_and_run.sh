@@ -19,14 +19,14 @@ python3 ./scripts/generate_inputs.py
 nargo execute > /dev/null 2>&1
 
 # Generate VK once (only if it doesn't exist yet or circuit has changed)
-if [ ! -f ./target/vk ]; then
-    echo -e "\033[0;32m===== Generating VK (one-time setup) =====\033[0m"
-    bb write_vk -b ./target/non_keyframe_edits.json -o ./target -c $HOME/.bb-crs
-fi
+echo -e "\033[0;32m===== Generating VK =====\033[0m"
+bb write_vk -b ./target/non_keyframe_edits.json -o ./target -c $HOME/.bb-crs
 
 # Pre-load large files into OS page cache to reduce I/O latency
 echo -e "\033[0;32m===== Pre-loading Files into Page Cache =====\033[0m"
-"$VMTOUCH" -t ./target/non_keyframe_edits.json $HOME/.bb-crs/bn254_g1.dat
+# "$VMTOUCH" ./target/non_keyframe_edits.json $HOME/.bb-crs/bn254_g1.dat
+cat ./target/non_keyframe_edits.json > /dev/null
+cat $HOME/.bb-crs/bn254_g1.dat > /dev/null
 
 echo -e "\033[0;32m===== Timing Proof Generation =====\033[0m"
 # Compute the proof using precomputed VK (proving key computed once per run)
@@ -35,4 +35,4 @@ time bb prove -b ./target/non_keyframe_edits.json -w ./target/non_keyframe_edits
 
 echo -e "\033[0;32m===== Timing verification =====\033[0m"
 # Verify the proof
-time bb verify -p ./target/proof -k ./target/vk -c $HOME/.bb-crs #--disable_zk
+time bb verify -p ./target/proof -k ./target/vk -i ./target/public_inputs -c $HOME/.bb-crs #--disable_zk
