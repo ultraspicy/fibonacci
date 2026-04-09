@@ -63,9 +63,9 @@ echo "   Rust: $(rustc --version)"
 # ------------------------------------------------------------------ #
 echo ""
 echo "===== [3/6] Installing Nargo $NARGO_VERSION ====="
+export PATH="$HOME/.nargo/bin:$PATH"
 if ! command -v noirup &>/dev/null; then
     curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
-    export PATH="$HOME/.nargo/bin:$PATH"
 fi
 noirup --version "$NARGO_VERSION"
 echo "   $(nargo --version | head -1)"
@@ -75,9 +75,9 @@ echo "   $(nargo --version | head -1)"
 # ------------------------------------------------------------------ #
 echo ""
 echo "===== [4/6] Installing bb $BB_VERSION ====="
+export PATH="$HOME/.bb/bin:$PATH"
 if ! command -v bbup &>/dev/null; then
     curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/bbup/install | bash
-    export PATH="$HOME/.bb/bin:$PATH"
 fi
 bbup --version "$BB_VERSION"
 echo "   bb: $(bb --version)"
