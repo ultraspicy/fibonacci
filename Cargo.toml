@@ -1,8 +1,3 @@
-change-id = 129295
-
-[llvm]
-download-ci-llvm = true
-
 [workspace]
 members = ["noir-video-editing/freivalds_vector_generator",
   "noir-video-editing/generate_freivalds_inputs"

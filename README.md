@@ -3,7 +3,7 @@ To find the test video used for this project:
 - The URLs for our batch of test videos are in `video_representation_experiments`.
 
 The main code for the experiments included in the paper is in:
-- `video-trimming` (redactable signatures related code)
+- `video-trimming` ((redactable) signatures related code)
 - `video-signature-verification` (code for interpolating video polynomials in circuit)
 - `video-representation-experiments` (estimating the improvement from SFVR)
 - `noir-video-editing` (implementation of video edits/video editing pipeline in Noir)
