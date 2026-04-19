@@ -1,5 +1,4 @@
-// This code is also heavily adapted from: https://github.com/Pratyush/hekaton-system/blob/main/cp-groth16/benches/bench.rs
-// The code in that file did like 90% of what I needed already.
+// This code is also adapted from: https://github.com/Pratyush/hekaton-system/blob/main/cp-groth16/benches/bench.rs
 
 use ark_bls12_381::{Bls12_381 as E, Fr as F};
 use ark_cp_groth16::{
@@ -11,6 +10,7 @@ use ark_cp_groth16::{
 use ark_ff::{Field, One, PrimeField, UniformRand};
 use ark_groth16::r1cs_to_qap::LibsnarkReduction as QAP;
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial};
+use ark_poly_commit::multilinear_pc::MultilinearPC;
 use ark_r1cs_std::{
     eq::EqGadget,
     fields::fp::FpVar,
@@ -25,7 +25,6 @@ use ark_std::log2;
 use ark_std::rand::Rng;
 use rand::SeedableRng;
 use sha2::{Digest, Sha256};
-use std::any::type_name;
 
 const MESSAGE_LENGTH: usize = 1 << 16;
 
@@ -63,7 +62,7 @@ impl PolyEvalCircuit {
     fn rand(mut rng: impl Rng) -> Self {
         // Sample a random multilinear polynomial of the correct degree.
         let degree = MESSAGE_LENGTH;
-        let mut polynomial = (0..degree).map(|_| F::rand(&mut rng)).collect::<Vec<_>>();
+        let polynomial = (0..degree).map(|_| F::rand(&mut rng)).collect::<Vec<_>>();
         Self::new(polynomial)
     }
 
@@ -154,7 +153,7 @@ fn main() {
     let mut rng = ark_std::test_rng();
     let circuit = PolyEvalCircuit::rand(&mut rng);
 
-    // Run the circuit and make sure it succeeds
+    // Sanity check the circuit/get constraint counts
     {
         let mut circuit = circuit.clone();
         let mut cs = MultiStageConstraintSystem::default();
@@ -162,7 +161,6 @@ fn main() {
         let point = (0..num_vars).map(|_| F::rand(&mut rng)).collect();
         circuit.add_point(point);
         circuit.generate_constraints(1, &mut cs).unwrap();
-        // assert!(cs.is_satisfied().unwrap());
         println!("Num constraints: {:?}", cs.num_constraints());
         println!(
             "Constraints per byte: {:?}",
@@ -170,75 +168,95 @@ fn main() {
         );
     }
 
-    // Generate the proving key
+    // Setup
     let start = ark_std::time::Instant::now();
     let pk = generate_parameters::<_, E, QAP>(circuit.clone(), &mut rng).unwrap();
-    println!(
-        "setup time for BLS12-381: {} s",
-        start.elapsed().as_secs_f64()
-    );
+    println!("Groth16 setup: {} s", start.elapsed().as_secs_f64());
 
     let mut rng = ark_std::test_rng();
     let mut cb = CommitmentBuilder::<_, E, QAP>::new(circuit, &pk);
+
+    let start = ark_std::time::Instant::now();
+    let mpc_params = MultilinearPC::<E>::setup(num_vars, &mut rng);
+    let (mpc_ck, mpc_vk) = MultilinearPC::<E>::trim(&mpc_params, num_vars);
+    println!("PCS setup: {} s", start.elapsed().as_secs_f64());
+
+    // Commit
     let start = ark_std::time::Instant::now();
     let (comm, rand) = cb.commit(&mut rng).unwrap();
-    println!(
-        "commitment time for BLS12-381: {} s",
-        start.elapsed().as_secs_f64()
-    );
-    println!("Comm is: {:?}", comm);
-    // println!("Comm bytes are: {:?}", comm.into_bytes());
+    println!("Groth16 commit: {} s", start.elapsed().as_secs_f64());
+    println!("Groth16 Commitment value is: {:?}", comm);
 
-    // Generate point from the commitment
+    // Build the MLE polynomial for commitment
+    let mle_poly =
+        DenseMultilinearExtension::from_evaluations_vec(num_vars, cb.circuit.polynomial.clone());
     let start = ark_std::time::Instant::now();
-    let mut compressed_comm = Vec::new();
-    comm.serialize_compressed(&mut compressed_comm).unwrap();
+    let mpc_comm = MultilinearPC::<E>::commit(&mpc_ck, &mle_poly);
+    println!("PCS commit: {} s", start.elapsed().as_secs_f64());
 
-    let mut hasher = Sha256::new();
-    hasher.update(&compressed_comm);
-    let seed = hasher.finalize();
-
-    let mut cp_rng = rand::rngs::StdRng::from_seed(seed.into());
-    let point = (0..num_vars)
-        .map(|_| F::rand(&mut cp_rng))
-        .collect::<Vec<_>>();
+    // Derive challenge point (Fiat-Shamir)
+    let point = {
+        let mut hasher = Sha256::new();
+        let mut buf = Vec::new();
+        comm.serialize_compressed(&mut buf).unwrap();
+        hasher.update(&buf);
+        buf.clear();
+        mpc_comm.serialize_compressed(&mut buf).unwrap();
+        hasher.update(&buf);
+        let seed = hasher.finalize();
+        let mut cp_rng = rand::rngs::StdRng::from_seed(seed.into());
+        (0..num_vars)
+            .map(|_| F::rand(&mut cp_rng))
+            .collect::<Vec<_>>()
+    };
+    let start = ark_std::time::Instant::now();
     cb.circuit.add_point(point.clone());
     println!(
-        "generating point from commit and prove data: {} s",
+        "Point derivation (add_point): {} s",
         start.elapsed().as_secs_f64()
     );
 
-    let start = ark_std::time::Instant::now();
+    // Prove / Open
     let mut inputs = point.clone();
     inputs.push(cb.circuit.evaluation.unwrap());
-    let proof = cb.prove(&[comm], &[rand], &mut rng).unwrap();
-    println!(
-        "proving time for BLS12-381: {} s",
-        start.elapsed().as_secs_f64()
-    );
+    let evaluation = cb.circuit.evaluation.unwrap();
 
     let start = ark_std::time::Instant::now();
+    let proof = cb.prove(&[comm], &[rand], &mut rng).unwrap();
+    println!("Groth16 prove: {} s", start.elapsed().as_secs_f64());
+
+    let start = ark_std::time::Instant::now();
+    let mpc_proof = MultilinearPC::<E>::open(&mpc_ck, &mle_poly, &point);
+    println!("PCS open: {} s", start.elapsed().as_secs_f64());
+
     // Verify
+    let start = ark_std::time::Instant::now();
     let pvk = prepare_verifying_key(&pk.vk());
     assert!(verify_proof(&pvk, &proof, &inputs).unwrap());
 
-    let mut compressed_comm = Vec::new();
-    proof.ds[0]
-        .serialize_compressed(&mut compressed_comm)
-        .unwrap();
+    // Re-derive point from the commitment embedded in the proof and the
+    // MultilinearPC commitment to confirm the challenge was formed correctly.
+    let claimed_point = {
+        let mut hasher = Sha256::new();
+        let mut buf = Vec::new();
+        proof.ds[0].serialize_compressed(&mut buf).unwrap();
+        hasher.update(&buf);
+        buf.clear();
+        mpc_comm.serialize_compressed(&mut buf).unwrap();
+        hasher.update(&buf);
+        let seed = hasher.finalize();
+        let mut cp_rng = rand::rngs::StdRng::from_seed(seed.into());
+        (0..num_vars)
+            .map(|_| F::rand(&mut cp_rng))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(claimed_point, inputs[0..num_vars]);
+    println!("CP-Groth16 verify: {} s", start.elapsed().as_secs_f64());
 
-    let mut hasher = Sha256::new();
-    hasher.update(&compressed_comm);
-    let seed = hasher.finalize();
-
-    let mut cp_rng = rand::rngs::StdRng::from_seed(seed.into());
-    let claimed_point = (0..num_vars)
-        .map(|_| F::rand(&mut cp_rng))
-        .collect::<Vec<_>>();
-    assert!(claimed_point == inputs[0..num_vars]);
-
-    println!(
-        "verification time for BLS12-381: {} s",
-        start.elapsed().as_secs_f64()
+    let start = ark_std::time::Instant::now();
+    assert!(
+        MultilinearPC::<E>::check(&mpc_vk, &mpc_comm, &point, evaluation, &mpc_proof),
+        "MultilinearPC verification failed"
     );
+    println!("MultilinearPC verify: {} s", start.elapsed().as_secs_f64());
 }
