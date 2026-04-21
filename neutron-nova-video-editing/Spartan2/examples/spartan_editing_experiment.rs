@@ -1,8 +1,7 @@
-//! examples/freivalds_convolution.rs
 //! Generic circuit for verifying the performance of implementing convolution-
 //! type transforms using Freivald's algorithm.
 //!
-//! Run with: `RUST_LOG=info cargo run --release --example naive_lc_blur`
+//! Run with: `RUST_LOG=info cargo run --release --example neutron_nova_editing_example`
 #![allow(non_snake_case)]
 use bellpepper_core::{ConstraintSystem, LinearCombination, SynthesisError, num::AllocatedNum};
 use ff::{Field, PrimeField, PrimeFieldBits};
@@ -44,8 +43,10 @@ fn generate_random_image(dimensions: (usize, usize)) -> Vec<Vec<u8>> {
 struct FreivaldsConvCircuit<Scalar: PrimeField> {
   image: Vec<Vec<u8>>,
   edited_image: Vec<Vec<u8>>,
+  target_image: Vec<Vec<u8>>,
   r: Vec<Scalar>,
   s: Vec<Scalar>,
+  logup_challenge: Scalar,
   rTA: Vec<Scalar>,
   As: Vec<Scalar>,
   _p: PhantomData<Scalar>,
@@ -62,18 +63,22 @@ impl<Scalar: PrimeField + PrimeFieldBits> FreivaldsConvCircuit<Scalar> {
 
     let r = generate_random_vector(height);
     let s = generate_random_vector(width);
+    let logup_challenge = generate_random_vector(1).remove(0);
 
     // For now, A_{left} and A_{right} are the identity matrix for respective
     // transformations, will swap these out when the zk part is ready.
     let edited_image = image.clone();
+    let target_image = edited_image.clone();
     let rTA = r.clone();
     let As = s.clone();
 
     Self {
       image,
       edited_image,
+      target_image,
       r,
       s,
+      logup_challenge,
       rTA,
       As,
       _p: PhantomData,
@@ -90,8 +95,8 @@ impl<E: Engine> SpartanCircuit<E> for FreivaldsConvCircuit<E::Scalar> {
 
     let mut public_vals = Vec::new();
 
-    let flattened_edited_image: Vec<<E as Engine>::Scalar> = self
-      .edited_image
+    let flattened_target_image: Vec<<E as Engine>::Scalar> = self
+      .target_image
       .clone()
       .into_iter()
       .map(|v| {
@@ -102,9 +107,10 @@ impl<E: Engine> SpartanCircuit<E> for FreivaldsConvCircuit<E::Scalar> {
       .flatten()
       .collect();
 
-    public_vals.extend(flattened_edited_image);
+    public_vals.extend(flattened_target_image);
     public_vals.extend(self.r.clone());
     public_vals.extend(self.s.clone());
+    public_vals.push(self.logup_challenge);
     public_vals.extend(self.rTA.clone());
     public_vals.extend(self.As.clone());
 
@@ -160,18 +166,31 @@ impl<E: Engine> SpartanCircuit<E> for FreivaldsConvCircuit<E::Scalar> {
       })
       .collect::<Result<Vec<Vec<_>>, _>>()?;
 
-    // 2. Allocate public inputs.
+    // 2. Allocate edited_image as private and target_image as public.
     let mut allocated_edited_image = Vec::new();
     for (i, row) in self.edited_image.clone().into_iter().enumerate() {
       let mut row_vars = Vec::new();
       for (j, pixel) in row.into_iter().enumerate() {
-        let n = AllocatedNum::alloc_input(
+        let n = AllocatedNum::alloc(
           cs.namespace(|| format!("edited image entry {i} {j}")),
           || Ok(E::Scalar::from_u128(pixel as u128)),
         )?;
         row_vars.push(n);
       }
       allocated_edited_image.push(row_vars);
+    }
+
+    let mut allocated_target_image = Vec::new();
+    for (i, row) in self.target_image.clone().into_iter().enumerate() {
+      let mut row_vars = Vec::new();
+      for (j, pixel) in row.into_iter().enumerate() {
+        let n = AllocatedNum::alloc_input(
+          cs.namespace(|| format!("target image entry {i} {j}")),
+          || Ok(E::Scalar::from_u128(pixel as u128)),
+        )?;
+        row_vars.push(n);
+      }
+      allocated_target_image.push(row_vars);
     }
 
     let mut allocated_r = Vec::new();
@@ -270,7 +289,10 @@ impl<E: Engine> SpartanCircuit<E> for FreivaldsConvCircuit<E::Scalar> {
     let mut lhs_level_one_lcs = Vec::new();
     let mut lhs_level_one_lc_values = Vec::new();
     let mut lhs_level_one_chunk_idx = 0;
-    let lhs_products: Vec<_> = IAs.iter().enumerate().zip(allocated_rTA.iter())
+    let lhs_products: Vec<_> = IAs
+      .iter()
+      .enumerate()
+      .zip(allocated_rTA.iter())
       .map(|((i, x), y)| {
         let product = x.mul(cs.namespace(|| format!("rTIAs multiplication {i}")), y)?;
         let val = self.rTA[i] * IAs_felts[i];
@@ -383,7 +405,10 @@ impl<E: Engine> SpartanCircuit<E> for FreivaldsConvCircuit<E::Scalar> {
     let mut rhs_level_one_lcs = Vec::new();
     let mut rhs_level_one_lc_values = Vec::new();
     let mut rhs_level_one_chunk_idx = 0;
-    let rhs_products: Vec<_> = Fs.iter().enumerate().zip(allocated_r.iter())
+    let rhs_products: Vec<_> = Fs
+      .iter()
+      .enumerate()
+      .zip(allocated_r.iter())
       .map(|((i, x), y)| {
         let product = x.mul(cs.namespace(|| format!("rTFAs multiplication {i}")), y)?;
         let val = Fs_felts[i] * self.r[i];
@@ -427,13 +452,21 @@ impl<E: Engine> SpartanCircuit<E> for FreivaldsConvCircuit<E::Scalar> {
       |lc| lc + rTFs.get_variable(),
     );
 
-    // 5. Enforce equality among the two convolved values.
+    // 5. Enforce equality among the two final felts from Freivalds.
     cs.enforce(
-      || format!("OutpFinal Freivalds validity check"),
+      || format!("Final Freivalds validity check"),
       |lc| lc + CS::one(),
       |lc| lc + rTFs.get_variable(),
       |lc| lc + rTAIAs.get_variable(),
     );
+
+    // 6. Range check the outputs.
+    let logup_multiplicities: Vec<u32> = vec![0u32; 256];
+
+    let _allocated_logup_challenge =
+      AllocatedNum::alloc_input(cs.namespace(|| "logup_challenge"), || {
+        Ok(self.logup_challenge)
+      })?;
 
     Ok(())
   }

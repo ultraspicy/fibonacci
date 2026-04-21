@@ -426,6 +426,13 @@ pub struct NeutronNovaProverKey<E: Engine> {
   vc_ck: CommitmentKey<E>,
 }
 
+impl<E: Engine> NeutronNovaProverKey<E> {
+  /// Returns `[num_cons, num_vars]` for the step and core circuits respectively.
+  pub fn num_constraints(&self) -> [usize; 2] {
+    [self.S_step.sizes()[0], self.S_core.sizes()[0]]
+  }
+}
+
 /// A type that represents the verifier's key
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "")]
@@ -1061,35 +1068,49 @@ where
     }
 
     // validate the step instances
+    let t_verify_start = std::time::Instant::now();
     let (_validate_span, validate_t) =
       start_span!("validate_instances", instances = self.step_instances.len());
+    let mut t_digest_total = std::time::Duration::ZERO;
+    let mut t_absorb_total = std::time::Duration::ZERO;
+    let mut t_validate_total = std::time::Duration::ZERO;
     for (i, u) in self.step_instances.iter().enumerate() {
       let mut transcript = E::TE::new(b"neutronnova_prove");
-      transcript.absorb(b"vk", &vk.digest()?);
+      let t = std::time::Instant::now(); let digest = vk.digest()?; t_digest_total += t.elapsed();
+      let t = std::time::Instant::now();
+      transcript.absorb(b"vk", &digest);
       transcript.absorb(
         b"num_circuits",
         &E::Scalar::from(self.step_instances.len() as u64),
       );
       transcript.absorb(b"circuit_index", &E::Scalar::from(i as u64));
-      // absorb the public IO into the transcript
       transcript.absorb(b"public_values", &u.public_values.as_slice());
-
-      u.validate(&vk.S_step, &mut transcript)?;
+      t_absorb_total += t.elapsed();
+      let t = std::time::Instant::now(); u.validate(&vk.S_step, &mut transcript)?; t_validate_total += t.elapsed();
     }
+    println!("[verify/validate_instances] vk.digest (total): {}ms", t_digest_total.as_millis());
+    println!("[verify/validate_instances] transcript absorb (total): {}ms", t_absorb_total.as_millis());
+    println!("[verify/validate_instances] u.validate step (total): {}ms", t_validate_total.as_millis());
 
     // validate the core instance
     let mut transcript = E::TE::new(b"neutronnova_prove");
-    transcript.absorb(b"vk", &vk.digest()?);
-    // absorb the public IO into the transcript
+    let t_core_digest = std::time::Instant::now(); let core_digest = vk.digest()?;
+    println!("[verify/validate_instances] vk.digest (core): {}ms", t_core_digest.elapsed().as_millis());
+    let t_core_absorb = std::time::Instant::now();
+    transcript.absorb(b"vk", &core_digest);
     transcript.absorb(
       b"public_values",
       &self.core_instance.public_values.as_slice(),
     );
-
+    println!("[verify/validate_instances] transcript absorb (core): {}ms", t_core_absorb.elapsed().as_millis());
+    let t_core_validate = std::time::Instant::now();
     self.core_instance.validate(&vk.S_core, &mut transcript)?;
+    println!("[verify/validate_instances] core_instance.validate: {}ms", t_core_validate.elapsed().as_millis());
+    println!("[verify] validate_instances: {}ms", validate_t.elapsed().as_millis());
     info!(elapsed_ms = %validate_t.elapsed().as_millis(), instances = self.step_instances.len(), "validate_instances");
 
     // we require all step instances to have the same shared commitment and match the shared commitment of the core instance
+    let t_shared_check = std::time::Instant::now();
     for u in &self.step_instances {
       if u.comm_W_shared != self.core_instance.comm_W_shared {
         return Err(SpartanError::ProofVerifyError {
@@ -1097,6 +1118,7 @@ where
         });
       }
     }
+    println!("[verify] shared_commitment_check: {}ms", t_shared_check.elapsed().as_millis());
 
     let (_convert_span, convert_t) = start_span!("convert_to_regular_verify");
     let mut step_instances_padded = self.step_instances.clone();
@@ -1112,18 +1134,25 @@ where
       .collect::<Result<Vec<_>, _>>()?;
 
     let core_instance_regular = self.core_instance.to_regular_instance()?;
+    println!("[verify] convert_to_regular: {}ms", convert_t.elapsed().as_millis());
     info!(elapsed_ms = %convert_t.elapsed().as_millis(), "convert_to_regular_verify");
 
     // We start a new transcript for the NeutronNova NIFS proof
+    let t_fold = std::time::Instant::now();
     let mut transcript = E::TE::new(b"neutronnova_prove");
 
     // absorb the verifier key and instances
+    let t_absorb_vk = std::time::Instant::now();
     transcript.absorb(b"vk", &vk.digest()?);
+    println!("[verify/fold] absorb vk: {}ms", t_absorb_vk.elapsed().as_millis());
+
+    let t_absorb_instances = std::time::Instant::now();
     transcript.absorb(b"core_instance", &core_instance_regular);
     for U in step_instances_regular.iter() {
       transcript.absorb(b"U", U);
     }
     transcript.absorb(b"T", &E::Scalar::ZERO); // we always have T=0 in NeutronNova
+    println!("[verify/fold] absorb instances: {}ms", t_absorb_instances.elapsed().as_millis());
 
     // compute the number of rounds of NIFS, outer sum-check, and inner sum-check
     let num_rounds_b = step_instances_regular.len().log_2();
@@ -1132,13 +1161,17 @@ where
     let num_rounds_y = num_vars.log_2() + 1;
 
     // we need num_rounds_b challenges for folding the step instances; we also need tau to compress multiple R1CS checks
+    let t_squeeze = std::time::Instant::now();
     let tau = transcript.squeeze(b"tau")?;
     let rhos = (0..num_rounds_b)
       .map(|_| transcript.squeeze(b"rho"))
       .collect::<Result<Vec<_>, _>>()?;
+    println!("[verify/fold] squeeze tau+rhos: {}ms", t_squeeze.elapsed().as_millis());
 
     // validate the provided multi-round verifier instance and advance transcript
+    let t_u_verifier_validate = std::time::Instant::now();
     self.U_verifier.validate(&vk.vc_shape, &mut transcript)?;
+    println!("[verify/fold] U_verifier.validate: {}ms", t_u_verifier_validate.elapsed().as_millis());
 
     let U_verifier_regular = self.U_verifier.to_regular_instance()?;
 
@@ -1163,18 +1196,25 @@ where
     let r = challenges[num_rounds_b + num_rounds_x]; // r for combining inner claims
     let r_y = challenges[num_rounds_b + num_rounds_x + 1..].to_vec();
 
+    let t_fold_multiple = std::time::Instant::now();
     let folded_U = R1CSInstance::fold_multiple(&r_b, &step_instances_regular)?;
+    println!("[verify/fold] fold_multiple: {}ms", t_fold_multiple.elapsed().as_millis());
 
+    let t_nifs_verify = std::time::Instant::now();
     let folded_U_verifier =
       self
         .nifs
         .verify(&mut transcript, &self.random_U, &U_verifier_regular)?;
+    println!("[verify/fold] nifs.verify: {}ms", t_nifs_verify.elapsed().as_millis());
 
+    let t_is_sat = std::time::Instant::now();
     vk.vc_shape_regular
       .is_sat_relaxed(&vk.vc_ck, &folded_U_verifier, &self.folded_W)
       .map_err(|e| SpartanError::ProofVerifyError {
         reason: format!("Folded instance not satisfiable: {e}"),
       })?;
+    println!("[verify/fold] is_sat_relaxed: {}ms", t_is_sat.elapsed().as_millis());
+    println!("[verify] transcript_absorb_fold_nifs: {}ms", t_fold.elapsed().as_millis());
 
     let (_matrix_eval_span, matrix_eval_t) = start_span!("matrix_evaluations");
     let (eval_A_step, eval_B_step, eval_C_step, eval_A_core, eval_B_core, eval_C_core) = {
@@ -1192,8 +1232,10 @@ where
         eval_C_core,
       )
     };
+    println!("[verify] matrix_evaluations: {}ms", matrix_eval_t.elapsed().as_millis());
     info!(elapsed_ms = %matrix_eval_t.elapsed().as_millis(), "matrix_evaluations");
 
+    let t_eval_x = std::time::Instant::now();
     let eval_X_step = {
       let X = vec![E::Scalar::ONE]
         .into_iter()
@@ -1230,6 +1272,7 @@ where
             .to_string(),
       });
     }
+    println!("[verify] eval_X_and_public_values_check: {}ms", t_eval_x.elapsed().as_millis());
 
     // verify PCS eval
     let c_eval = transcript.squeeze(b"c_eval")?;
@@ -1257,8 +1300,10 @@ where
       &comm_eval,
       &self.eval_arg,
     )?;
+    println!("[verify] pcs_verify: {}ms", pcs_verify_t.elapsed().as_millis());
     info!(elapsed_ms = %pcs_verify_t.elapsed().as_millis(), "pcs_verify");
 
+    println!("[verify] TOTAL: {}ms", t_verify_start.elapsed().as_millis());
     info!(elapsed_ms = %_verify_t.elapsed().as_millis(), "neutronnova_verify");
 
     let public_values_step = self

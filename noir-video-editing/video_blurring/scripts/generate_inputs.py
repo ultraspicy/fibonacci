@@ -20,8 +20,8 @@ def main():
     with config_path.open("rb") as f:
         prover_inputs = tomllib.load(f)
 
-    image_height = 240#len(prover_inputs['original_image'])
-    image_width = 320#len(prover_inputs['original_image'][0])
+    image_height = 400#len(prover_inputs['original_image'])
+    image_width = 400#len(prover_inputs['original_image'][0])
     random_image = [[str(random.randint(0, 255)) for _ in range(image_width)] for _ in range(image_height)]
 
     target_middle_image = random_image.copy()
