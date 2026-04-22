@@ -18,9 +18,53 @@ use tracing::{info, info_span};
 
 const KERNEL_SIZE: usize = 9;
 const RADIUS: usize = KERNEL_SIZE / 2;
-const LAYER_ONE_CHUNK_SIZE: usize = 150;
-const NUM_CIRCUITS: usize = 16;
+const LAYER_ONE_CHUNK_SIZE: usize = 100;
+const NUM_CIRCUITS: usize = 64;
 const IMAGE_DIMS: (usize, usize) = (720, 1280);
+
+#[derive(Clone, Debug)]
+struct DummyCircuit<E: Engine>(PhantomData<E>);
+
+impl<E: Engine> Default for DummyCircuit<E> {
+  fn default() -> Self {
+    Self(PhantomData)
+  }
+}
+
+impl<E: Engine> SpartanCircuit<E> for DummyCircuit<E> {
+  fn public_values(&self) -> Result<Vec<E::Scalar>, bellpepper_core::SynthesisError> {
+    Ok(vec![])
+  }
+
+  fn shared<CS: bellpepper_core::ConstraintSystem<E::Scalar>>(
+    &self,
+    _: &mut CS,
+  ) -> Result<Vec<AllocatedNum<E::Scalar>>, bellpepper_core::SynthesisError> {
+    Ok(vec![])
+  }
+
+  fn precommitted<CS: bellpepper_core::ConstraintSystem<E::Scalar>>(
+    &self,
+    _: &mut CS,
+    _: &[AllocatedNum<E::Scalar>],
+  ) -> Result<Vec<AllocatedNum<E::Scalar>>, bellpepper_core::SynthesisError> {
+    Ok(vec![])
+  }
+
+  fn num_challenges(&self) -> usize {
+    0
+  }
+
+  fn synthesize<CS: bellpepper_core::ConstraintSystem<E::Scalar>>(
+    &self,
+    _: &mut CS,
+    _: &[AllocatedNum<E::Scalar>],
+    _: &[AllocatedNum<E::Scalar>],
+    _: Option<&[E::Scalar]>,
+  ) -> Result<(), bellpepper_core::SynthesisError> {
+    Ok(())
+  }
+}
 
 fn generate_random_vector<Scalar: PrimeField + PrimeFieldBits>(length: usize) -> Vec<Scalar> {
   let mut rng = rand::thread_rng();
@@ -480,7 +524,8 @@ fn main() {
 
   let t0 = Instant::now();
   let (pk, vk) =
-    NeutronNovaZkSNARK::<E>::setup(&shape_circuit, &shape_circuit, NUM_CIRCUITS).unwrap();
+    NeutronNovaZkSNARK::<E>::setup(&shape_circuit, &DummyCircuit::<E>::default(), NUM_CIRCUITS)
+      .unwrap();
   let setup_ms = t0.elapsed().as_millis();
   let [step_cons, core_cons] = pk.num_constraints();
   info!(
@@ -497,14 +542,15 @@ fn main() {
     .collect();
   info!(elapsed_ms = t0.elapsed().as_millis(), "generate_witness");
 
-  let core_circuit = &step_circuits[0];
+  let core_circuit = DummyCircuit::<E>::default();
 
   let t0 = Instant::now();
-  let prep = NeutronNovaZkSNARK::<E>::prep_prove(&pk, &step_circuits, core_circuit, false).unwrap();
+  let prep =
+    NeutronNovaZkSNARK::<E>::prep_prove(&pk, &step_circuits, &core_circuit, false).unwrap();
   info!(elapsed_ms = t0.elapsed().as_millis(), "prep_prove");
 
   let t0 = Instant::now();
-  let snark = NeutronNovaZkSNARK::prove(&pk, &step_circuits, core_circuit, &prep, false).unwrap();
+  let snark = NeutronNovaZkSNARK::prove(&pk, &step_circuits, &core_circuit, &prep, false).unwrap();
   info!(elapsed_ms = t0.elapsed().as_millis(), "prove");
 
   let t0 = Instant::now();
