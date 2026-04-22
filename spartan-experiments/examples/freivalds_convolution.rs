@@ -4,9 +4,8 @@
 //!
 //! Run with: `RUST_LOG=info cargo run --release --example naive_lc_blur`
 #![allow(non_snake_case)]
-use bellpepper_core::{ConstraintSystem, LinearCombination, SynthesisError, num::AllocatedNum};
+use bellpepper_core::{ConstraintSystem, SynthesisError, num::AllocatedNum};
 use ff::{Field, PrimeField, PrimeFieldBits};
-use itertools::Itertools;
 use rand::{Rng, RngCore};
 use spartan2::{
   provider::T256HyraxEngine,
@@ -21,7 +20,6 @@ type E = T256HyraxEngine;
 
 const KERNEL_SIZE: usize = 9;
 const RADIUS: usize = KERNEL_SIZE / 2;
-const LAYER_ONE_CHUNK_SIZE: usize = 100;
 
 fn generate_random_vector<Scalar: PrimeField + PrimeFieldBits>(length: usize) -> Vec<Scalar> {
   let mut rng = rand::thread_rng();
@@ -204,228 +202,132 @@ impl<E: Engine> SpartanCircuit<E> for FreivaldsConvCircuit<E::Scalar> {
     let mut IAs = Vec::new();
     let mut IAs_felts = Vec::new();
     for (i, row) in image_input_vars.iter().enumerate() {
-      let mut row_products = Vec::new();
-      let mut row_product_values = Vec::new();
-      for ((j, x), y) in row.iter().enumerate().zip(allocated_As.iter()) {
-        let product = x.mul(cs.namespace(|| format!("IAs multiplication {i} {j}")), y)?;
-        row_products.push(product);
-        row_product_values.push(E::Scalar::from_u128(self.image[i][j] as u128) * self.As[j]);
-      }
+      let mut row_partial_sums: Vec<AllocatedNum<E::Scalar>> = Vec::new();
+      let mut running_sum = E::Scalar::ZERO;
 
-      let mut level_one_lcs = Vec::new();
-      let mut level_one_lc_values = Vec::new();
-      let mut level_one_chunk_idx = 0;
-      for chunk in row_products
-        .iter()
-        .zip(row_product_values.iter())
-        .chunks(LAYER_ONE_CHUNK_SIZE)
-        .into_iter()
-      {
-        let mut inner_lc = LinearCombination::zero();
-        let mut inner_lc_val = E::Scalar::ZERO;
-        for (product, product_value) in chunk {
-          inner_lc = inner_lc.clone() + (<E as Engine>::Scalar::ONE, product.get_variable());
-          inner_lc_val = inner_lc_val + product_value;
-        }
-        let inner_lc_var = AllocatedNum::alloc(
-          cs.namespace(|| format!("Row {i} IAs inner product {level_one_chunk_idx}")),
-          || Ok(inner_lc_val),
+      for ((j, x), y) in row.iter().enumerate().zip(allocated_As.iter()) {
+        running_sum = running_sum + E::Scalar::from_u128(self.image[i][j] as u128) * self.As[j];
+
+        let partial_sum_var = AllocatedNum::alloc(
+          cs.namespace(|| format!("Row {i} IAs partial sum {j}")),
+          || Ok(running_sum),
         )?;
 
-        cs.enforce(
-          || format!("Row {i} intermediate linear combination {level_one_chunk_idx}"),
-          |lc| lc + CS::one(),
-          |lc| lc + &inner_lc,
-          |lc| lc + inner_lc_var.get_variable(),
-        );
+        if j == 0 {
+          cs.enforce(
+            || format!("Row {i} IAs partial sum constraint {j}"),
+            |lc| lc + x.get_variable(),
+            |lc| lc + y.get_variable(),
+            |lc| lc + partial_sum_var.get_variable(),
+          );
+        } else {
+          cs.enforce(
+            || format!("Row {i} IAs partial sum constraint {j}"),
+            |lc| lc + x.get_variable(),
+            |lc| lc + y.get_variable(),
+            |lc| lc + partial_sum_var.get_variable() - row_partial_sums[j - 1].get_variable(),
+          );
+        }
 
-        level_one_lcs.push(inner_lc_var);
-        level_one_lc_values.push(inner_lc_val);
-        level_one_chunk_idx += 1;
+        row_partial_sums.push(partial_sum_var);
       }
 
-      let mut level_two_lc = LinearCombination::zero();
-      let mut level_two_lc_val = E::Scalar::ZERO;
-      for (var, value) in level_one_lcs.iter().zip(level_one_lc_values.iter()) {
-        level_two_lc = level_two_lc.clone() + (<E as Engine>::Scalar::ONE, var.get_variable());
-        level_two_lc_val = level_two_lc_val + value;
-      }
-
-      let inner_product_var = AllocatedNum::alloc(
-        cs.namespace(|| format!("Row {i} IAs inner product")),
-        || Ok(level_two_lc_val),
-      )?;
-      cs.enforce(
-        || format!("Row {i} IAs inner product LC"),
-        |lc| lc + CS::one(),
-        |lc| lc + &level_two_lc,
-        |lc| lc + inner_product_var.get_variable(),
-      );
-
-      IAs.push(inner_product_var);
-      IAs_felts.push(level_two_lc_val);
+      IAs_felts.push(running_sum);
+      IAs.push(row_partial_sums.pop().unwrap());
     }
 
     // 1D for loop computing the vector vector product (r^TA)(I(As))
-    let mut lhs_level_one_lcs = Vec::new();
-    let mut lhs_level_one_lc_values = Vec::new();
-    let mut lhs_level_one_chunk_idx = 0;
-    let lhs_products: Vec<_> = IAs.iter().enumerate().zip(allocated_rTA.iter())
-      .map(|((i, x), y)| {
-        let product = x.mul(cs.namespace(|| format!("rTIAs multiplication {i}")), y)?;
-        let val = self.rTA[i] * IAs_felts[i];
-        Ok((product, val))
-      })
-      .collect::<Result<_, SynthesisError>>()?;
-    for chunk in lhs_products.iter().chunks(LAYER_ONE_CHUNK_SIZE).into_iter() {
-      let mut inner_lc = LinearCombination::zero();
-      let mut inner_lc_val = E::Scalar::ZERO;
-      for (product, val) in chunk {
-        inner_lc = inner_lc.clone() + (<E as Engine>::Scalar::ONE, product.get_variable());
-        inner_lc_val = inner_lc_val + val;
-      }
-      let inner_lc_var = AllocatedNum::alloc(
-        cs.namespace(|| format!("LHS inner product {lhs_level_one_chunk_idx}")),
-        || Ok(inner_lc_val),
+    let mut lhs_partial_sums: Vec<AllocatedNum<E::Scalar>> = Vec::new();
+    let mut lhs_running_sum = E::Scalar::ZERO;
+    for (i, (x, y)) in IAs.iter().zip(allocated_rTA.iter()).enumerate() {
+      lhs_running_sum = lhs_running_sum + self.rTA[i] * IAs_felts[i];
+      let partial_sum_var = AllocatedNum::alloc(
+        cs.namespace(|| format!("LHS partial sum {i}")),
+        || Ok(lhs_running_sum),
       )?;
-      cs.enforce(
-        || format!("LHS intermediate linear combination {lhs_level_one_chunk_idx}"),
-        |lc| lc + CS::one(),
-        |lc| lc + &inner_lc,
-        |lc| lc + inner_lc_var.get_variable(),
-      );
-      lhs_level_one_lcs.push(inner_lc_var);
-      lhs_level_one_lc_values.push(inner_lc_val);
-      lhs_level_one_chunk_idx += 1;
+      if i == 0 {
+        cs.enforce(
+          || format!("LHS partial sum constraint {i}"),
+          |lc| lc + x.get_variable(),
+          |lc| lc + y.get_variable(),
+          |lc| lc + partial_sum_var.get_variable(),
+        );
+      } else {
+        cs.enforce(
+          || format!("LHS partial sum constraint {i}"),
+          |lc| lc + x.get_variable(),
+          |lc| lc + y.get_variable(),
+          |lc| lc + partial_sum_var.get_variable() - lhs_partial_sums[i - 1].get_variable(),
+        );
+      }
+      lhs_partial_sums.push(partial_sum_var);
     }
-    let mut lhs_sum_lc = LinearCombination::zero();
-    let mut lhs_sum = E::Scalar::ZERO;
-    for (var, value) in lhs_level_one_lcs.iter().zip(lhs_level_one_lc_values.iter()) {
-      lhs_sum_lc = lhs_sum_lc.clone() + (<E as Engine>::Scalar::ONE, var.get_variable());
-      lhs_sum = lhs_sum + value;
-    }
-    let rTAIAs = AllocatedNum::alloc(cs.namespace(|| format!("Freivalds LHS Result")), || {
-      Ok(lhs_sum)
-    })?;
-    cs.enforce(
-      || format!("Freivalds LHS constraint"),
-      |lc| lc + CS::one(),
-      |lc| lc + &lhs_sum_lc,
-      |lc| lc + rTAIAs.get_variable(),
-    );
+    let rTAIAs = lhs_partial_sums.pop().unwrap();
 
     // 4. Compute RHS convolution (r^T)F(s).
     let mut Fs = Vec::new();
     let mut Fs_felts = Vec::new();
     for (i, row) in allocated_edited_image.iter().enumerate() {
-      let mut row_products = Vec::new();
-      let mut row_product_values = Vec::new();
-      for ((j, x), y) in row.iter().enumerate().zip(allocated_s.iter()) {
-        let product = x.mul(cs.namespace(|| format!("Fs multiplication {i} {j}")), y)?;
-        row_products.push(product);
-        row_product_values.push(E::Scalar::from_u128(self.edited_image[i][j] as u128) * self.As[j]);
-      }
+      let mut row_partial_sums: Vec<AllocatedNum<E::Scalar>> = Vec::new();
+      let mut running_sum = E::Scalar::ZERO;
 
-      let mut level_one_lcs = Vec::new();
-      let mut level_one_lc_values = Vec::new();
-      let mut level_one_chunk_idx = 0;
-      for chunk in row_products
-        .iter()
-        .zip(row_product_values.iter())
-        .chunks(LAYER_ONE_CHUNK_SIZE)
-        .into_iter()
-      {
-        let mut inner_lc = LinearCombination::zero();
-        let mut inner_lc_val = E::Scalar::ZERO;
-        for (product, product_value) in chunk {
-          inner_lc = inner_lc.clone() + (<E as Engine>::Scalar::ONE, product.get_variable());
-          inner_lc_val = inner_lc_val + product_value;
-        }
-        let inner_lc_var = AllocatedNum::alloc(
-          cs.namespace(|| format!("Row {i} Fs inner product {level_one_chunk_idx}")),
-          || Ok(inner_lc_val),
+      for ((j, x), y) in row.iter().enumerate().zip(allocated_s.iter()) {
+        running_sum = running_sum + E::Scalar::from_u128(self.edited_image[i][j] as u128) * self.As[j];
+
+        let partial_sum_var = AllocatedNum::alloc(
+          cs.namespace(|| format!("Row {i} Fs partial sum {j}")),
+          || Ok(running_sum),
         )?;
 
-        cs.enforce(
-          || format!("Row {i} Fs intermediate linear combination {level_one_chunk_idx}"),
-          |lc| lc + CS::one(),
-          |lc| lc + &inner_lc,
-          |lc| lc + inner_lc_var.get_variable(),
-        );
+        if j == 0 {
+          cs.enforce(
+            || format!("Row {i} Fs partial sum constraint {j}"),
+            |lc| lc + x.get_variable(),
+            |lc| lc + y.get_variable(),
+            |lc| lc + partial_sum_var.get_variable(),
+          );
+        } else {
+          cs.enforce(
+            || format!("Row {i} Fs partial sum constraint {j}"),
+            |lc| lc + x.get_variable(),
+            |lc| lc + y.get_variable(),
+            |lc| lc + partial_sum_var.get_variable() - row_partial_sums[j - 1].get_variable(),
+          );
+        }
 
-        level_one_lcs.push(inner_lc_var);
-        level_one_lc_values.push(inner_lc_val);
-        level_one_chunk_idx += 1;
+        row_partial_sums.push(partial_sum_var);
       }
 
-      let mut level_two_lc = LinearCombination::zero();
-      let mut level_two_lc_val = E::Scalar::ZERO;
-      for (var, value) in level_one_lcs.iter().zip(level_one_lc_values.iter()) {
-        level_two_lc = level_two_lc.clone() + (<E as Engine>::Scalar::ONE, var.get_variable());
-        level_two_lc_val = level_two_lc_val + value;
-      }
-
-      let inner_product_var =
-        AllocatedNum::alloc(cs.namespace(|| format!("Row {i} Fs inner product")), || {
-          Ok(level_two_lc_val)
-        })?;
-      cs.enforce(
-        || format!("Row {i} Fs inner product LC"),
-        |lc| lc + CS::one(),
-        |lc| lc + &level_two_lc,
-        |lc| lc + inner_product_var.get_variable(),
-      );
-
-      Fs.push(inner_product_var);
-      Fs_felts.push(level_two_lc_val);
+      Fs_felts.push(running_sum);
+      Fs.push(row_partial_sums.pop().unwrap());
     }
 
-    let mut rhs_level_one_lcs = Vec::new();
-    let mut rhs_level_one_lc_values = Vec::new();
-    let mut rhs_level_one_chunk_idx = 0;
-    let rhs_products: Vec<_> = Fs.iter().enumerate().zip(allocated_r.iter())
-      .map(|((i, x), y)| {
-        let product = x.mul(cs.namespace(|| format!("rTFAs multiplication {i}")), y)?;
-        let val = Fs_felts[i] * self.r[i];
-        Ok((product, val))
-      })
-      .collect::<Result<_, SynthesisError>>()?;
-    for chunk in rhs_products.iter().chunks(LAYER_ONE_CHUNK_SIZE).into_iter() {
-      let mut inner_lc = LinearCombination::zero();
-      let mut inner_lc_val = E::Scalar::ZERO;
-      for (product, val) in chunk {
-        inner_lc = inner_lc.clone() + (<E as Engine>::Scalar::ONE, product.get_variable());
-        inner_lc_val = inner_lc_val + val;
-      }
-      let inner_lc_var = AllocatedNum::alloc(
-        cs.namespace(|| format!("RHS inner product {rhs_level_one_chunk_idx}")),
-        || Ok(inner_lc_val),
+    let mut rhs_partial_sums: Vec<AllocatedNum<E::Scalar>> = Vec::new();
+    let mut rhs_running_sum = E::Scalar::ZERO;
+    for (i, (x, y)) in Fs.iter().zip(allocated_r.iter()).enumerate() {
+      rhs_running_sum = rhs_running_sum + Fs_felts[i] * self.r[i];
+      let partial_sum_var = AllocatedNum::alloc(
+        cs.namespace(|| format!("RHS partial sum {i}")),
+        || Ok(rhs_running_sum),
       )?;
-      cs.enforce(
-        || format!("RHS intermediate linear combination {rhs_level_one_chunk_idx}"),
-        |lc| lc + CS::one(),
-        |lc| lc + &inner_lc,
-        |lc| lc + inner_lc_var.get_variable(),
-      );
-      rhs_level_one_lcs.push(inner_lc_var);
-      rhs_level_one_lc_values.push(inner_lc_val);
-      rhs_level_one_chunk_idx += 1;
+      if i == 0 {
+        cs.enforce(
+          || format!("RHS partial sum constraint {i}"),
+          |lc| lc + x.get_variable(),
+          |lc| lc + y.get_variable(),
+          |lc| lc + partial_sum_var.get_variable(),
+        );
+      } else {
+        cs.enforce(
+          || format!("RHS partial sum constraint {i}"),
+          |lc| lc + x.get_variable(),
+          |lc| lc + y.get_variable(),
+          |lc| lc + partial_sum_var.get_variable() - rhs_partial_sums[i - 1].get_variable(),
+        );
+      }
+      rhs_partial_sums.push(partial_sum_var);
     }
-    let mut rhs_sum_lc = LinearCombination::zero();
-    let mut rhs_sum = E::Scalar::ZERO;
-    for (var, value) in rhs_level_one_lcs.iter().zip(rhs_level_one_lc_values.iter()) {
-      rhs_sum_lc = rhs_sum_lc.clone() + (<E as Engine>::Scalar::ONE, var.get_variable());
-      rhs_sum = rhs_sum + value;
-    }
-    let rTFs = AllocatedNum::alloc(cs.namespace(|| format!("Freivalds RHS Result")), || {
-      Ok(rhs_sum)
-    })?;
-    cs.enforce(
-      || format!("Freivalds RHS constraint"),
-      |lc| lc + CS::one(),
-      |lc| lc + &rhs_sum_lc,
-      |lc| lc + rTFs.get_variable(),
-    );
+    let rTFs = rhs_partial_sums.pop().unwrap();
 
     // 5. Enforce equality among the two convolved values.
     cs.enforce(
@@ -442,7 +344,7 @@ impl<E: Engine> SpartanCircuit<E> for FreivaldsConvCircuit<E::Scalar> {
 fn main() {
   tracing_subscriber::fmt()
     .with_target(false)
-    .with_ansi(true)                // no bold colour codes
+    .with_ansi(true)
     .with_env_filter(EnvFilter::from_default_env())
     .init();
 
@@ -451,7 +353,6 @@ fn main() {
 
   let test_image = generate_random_image(image_dims);
 
-  // Message lengths: 2^10 … 2^11 bytes.
   let circuit = FreivaldsConvCircuit::<<E as Engine>::Scalar>::new(test_image);
 
   let root_span = info_span!("bench", "image").entered();
