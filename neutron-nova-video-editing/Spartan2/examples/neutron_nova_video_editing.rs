@@ -20,7 +20,7 @@ use tracing::{info, info_span};
 const KERNEL_SIZE: usize = 9;
 const RADIUS: usize = KERNEL_SIZE / 2;
 const BYTES_PER_FIELD_ELEMENT: usize = 30;
-const NUM_CIRCUITS: usize = 2;
+const NUM_CIRCUITS: usize = 16;
 const IMAGE_DIMS: (usize, usize) = (720, 1280);
 
 #[derive(Clone, Debug)]
@@ -588,13 +588,7 @@ fn main() {
     NeutronNovaZkSNARK::<E>::setup(&shape_circuit, &DummyCircuit::<E>::default(), NUM_CIRCUITS)
       .unwrap();
   let setup_ms = t0.elapsed().as_millis();
-  let [step_cons, core_cons] = pk.num_constraints();
-  info!(
-    elapsed_ms = setup_ms,
-    step_constraints = step_cons,
-    core_constraints = core_cons,
-    "setup"
-  );
+  info!(elapsed_ms = setup_ms, "setup");
 
   // Build the step circuits — each represents one video frame.
   let t0 = Instant::now();
@@ -611,13 +605,14 @@ fn main() {
   info!(elapsed_ms = t0.elapsed().as_millis(), "prep_prove");
 
   let t0 = Instant::now();
-  let snark = NeutronNovaZkSNARK::prove(&pk, &step_circuits, &core_circuit, &prep, false).unwrap();
+  let (snark, _prep) =
+    NeutronNovaZkSNARK::prove(&pk, &step_circuits, &core_circuit, prep, false).unwrap();
   info!(elapsed_ms = t0.elapsed().as_millis(), "prove");
 
   let t0 = Instant::now();
   let result = snark.verify(&vk, NUM_CIRCUITS).unwrap();
   let verify_ms = t0.elapsed().as_millis();
-  let (public_values_step, _public_values_core) = result;
+  let (public_values_step, _public_values_core): (Vec<_>, Vec<_>) = result;
   info!(elapsed_ms = verify_ms, "verify");
 
   info!(
