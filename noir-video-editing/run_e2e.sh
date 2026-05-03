@@ -107,9 +107,14 @@ for (( frame_num=0; frame_num<MAX_FRAMES; frame_num++ )); do
         else
             # --- Non-keyframe: sparse non_keyframe_edits circuit ---
 
-            # Setup (not measured): generate inputs
+            # Setup (not measured): compute real delta(frame[t], frame[t-1]) + Freivalds vectors
+            PREV_FRAME_ID=$(printf "%04d" $(( frame_num - 1 )))
+            PREV_INPUT_FILE="$INPUT_DIR/Prover_${PREV_FRAME_ID}_${CHANNEL}.toml"
+            cp "$INPUT_FILE" "$FREIVALDS_DIR/Prover.toml"
+            cd "$FREIVALDS_DIR"
+            RUSTFLAGS="-A warnings" cargo run --release "delta" "$PREV_INPUT_FILE" > /dev/null 2>&1
+            cp "$FREIVALDS_DIR/Prover.toml" "$NON_KEYFRAME_DIR/Prover.toml"
             cd "$NON_KEYFRAME_DIR"
-            python3 ./scripts/generate_inputs.py > /dev/null 2>&1
 
             # Witness: nargo execute only
             W_START=$(ms)

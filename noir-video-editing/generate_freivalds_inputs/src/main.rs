@@ -15,6 +15,12 @@ static GBLUR_RADIUS: usize = 30;
 static KERNEL_SCALE: u64 = 1u64 << 32;
 static FILTER_BITS: usize = 16;
 
+const DELTA_BATCH_SIZE: usize = 10;
+const MAX_DELTA_LENGTH: usize = 128 * 360; // max 460,800 changed pixels (~50% of frame)
+
+// ── Prover.toml structs ──────────────────────────────────────────────────────
+
+/// Keyframe circuit inputs (video_blurring).
 #[derive(Debug, Deserialize, Serialize)]
 struct ProverInputs {
     original_image: Vec<Vec<String>>,
@@ -28,6 +34,30 @@ struct ProverInputs {
     other: toml::Value,
 }
 
+/// Read just original_image from any Prover.toml (used to load the previous frame).
+#[derive(Debug, Deserialize)]
+struct ProverInputsMinimal {
+    original_image: Vec<Vec<String>>,
+}
+
+/// Non-keyframe circuit inputs (non_keyframe_edits).
+#[derive(Debug, Serialize)]
+#[allow(non_snake_case)]
+struct DeltaProverInputs {
+    delta_batches: Vec<Vec<String>>,
+    delta_is: Vec<String>,
+    delta_js: Vec<Vec<String>>,
+    /// r^T × (blur(current) - blur(prev)) × s, computed outside the circuit.
+    /// The circuit verifies this equals r^T × A × (current - prev) × s (sparse).
+    rT_delta_blur_s: String,
+    r: Vec<String>,
+    s: Vec<String>,
+    rTA: Vec<String>,
+    As: Vec<String>,
+}
+
+// ── Matrix type ──────────────────────────────────────────────────────────────
+
 #[derive(Debug, Clone, Copy)]
 enum MatrixType {
     Tridiagonal,
@@ -35,11 +65,12 @@ enum MatrixType {
     GBlur,
 }
 
-// generate a random 256 bit Fr
+// ── Field helpers ────────────────────────────────────────────────────────────
+
 fn gen_rand_scalar() -> Fr {
     let mut rng = rand::thread_rng();
     loop {
-        let random_bytes: [u8; 32] = rng.gen(); //  a syntax sugar to generates 32 random bytes and packs them into the array
+        let random_bytes: [u8; 32] = rng.gen();
         if let Some(val) = Fr::from_random_bytes(&random_bytes) {
             return val;
         }
@@ -60,276 +91,121 @@ fn scalar_matrix_to_string_matrix(arr: Vec<Vec<Fr>>) -> Vec<Vec<String>> {
         .collect()
 }
 
-// Inner product of two vectors
+// ── Linear algebra ───────────────────────────────────────────────────────────
+
 fn inner_product(u: &[Fr], v: &[Fr]) -> Fr {
-    let len = u.len();
-    assert!(len > 0);
-    assert!(len == v.len(), "Vectors must have the same length");
-
-    let mut result = Fr::zero();
-    for i in 0..len {
-        result += u[i] * v[i];
-    }
-    result
+    assert_eq!(u.len(), v.len());
+    u.iter().zip(v.iter()).fold(Fr::zero(), |acc, (a, b)| acc + *a * *b)
 }
 
-// Matrix-vector product Av
 fn matrix_vector_product(a: &[Vec<Fr>], v: &[Fr]) -> Vec<Fr> {
-    let height = a.len();
-    assert!(height > 0);
-    let width = a[0].len();
-    assert!(width == v.len());
-    let mut output = Vec::new();
-    for i in 0..height {
-        let mut inner_prod = Fr::zero();
-        for j in 0..width {
-            inner_prod += a[i][j] * v[j];
-        }
-        output.push(inner_prod);
-    }
-    output
+    a.iter().map(|row| {
+        row.iter().zip(v.iter()).fold(Fr::zero(), |acc, (a, b)| acc + *a * *b)
+    }).collect()
 }
 
-// vector matrix product (v^T)A
 fn vector_matrix_product(v: &[Fr], a: &[Vec<Fr>]) -> Vec<Fr> {
-    let height = a.len();
-    assert!(height > 0);
-    assert!(height == v.len());
     let width = a[0].len();
     let mut output = vec![Fr::zero(); width];
-    
-    for i in 0..height {
-        for j in 0..width {
-            output[j] += a[i][j] * v[i];
+    for (i, row) in a.iter().enumerate() {
+        for (j, &val) in row.iter().enumerate() {
+            output[j] += val * v[i];
         }
     }
     output
 }
 
-// Regular matrix-matrix product (no band optimization)
 fn matrix_matrix_product(a: &[Vec<Fr>], b: &[Vec<Fr>]) -> Vec<Vec<Fr>> {
-    let a_height = a.len();
-    assert!(a_height > 0);
-    let a_width = a[0].len();
-
-    let b_height = b.len();
-    assert!(b_height > 0);
     let b_width = b[0].len();
-
-    assert!(
-        a_width == b_height,
-        "Matrix dimensions incompatible for multiplication"
-    );
-
-    a.par_iter()
-        .map(|a_row| {
-            let mut row = vec![Fr::zero(); b_width];
-            for j in 0..b_width {
-                let mut inner_prod = Fr::zero();
-                for k in 0..a_width {
-                    inner_prod += a_row[k] * b[k][j];
-                }
-                row[j] = inner_prod;
+    a.par_iter().map(|a_row| {
+        let mut row = vec![Fr::zero(); b_width];
+        for j in 0..b_width {
+            for k in 0..a_row.len() {
+                row[j] += a_row[k] * b[k][j];
             }
-            row
-        })
-        .collect()
+        }
+        row
+    }).collect()
 }
 
-// Matrix-matrix product AB where A is a band matrix (parallelized)
-// A has band structure: non-zero entries within kernel_width of diagonal
-// B can be any matrix
-fn matrix_matrix_product_band_left(
-    a: &[Vec<Fr>],
-    b: &[Vec<Fr>],
-    kernel_width: usize,
-) -> Vec<Vec<Fr>> {
-    let a_height = a.len();
-    assert!(a_height > 0);
+fn matrix_matrix_product_band_left(a: &[Vec<Fr>], b: &[Vec<Fr>], kernel_width: usize) -> Vec<Vec<Fr>> {
     let a_width = a[0].len();
-
-    let b_height = b.len();
-    assert!(b_height > 0);
     let b_width = b[0].len();
-
-    assert!(
-        a_width == b_height,
-        "Matrix dimensions incompatible for multiplication"
-    );
-
-    // Process rows in parallel
-    a.par_iter()
-        .enumerate()
-        .map(|(i, a_row)| {
-            let mut row = vec![Fr::zero(); b_width];
-
-            // For row i of A, non-zero entries are in columns [i-kernel_width, i+kernel_width]
-            let k_start = i.saturating_sub(kernel_width);
-            let k_end = (i + kernel_width + 1).min(a_width);
-
-            for j in 0..b_width {
-                let mut inner_prod = Fr::zero();
-
-                // Only iterate over the band where A[i][k] is non-zero
-                for k in k_start..k_end {
-                    inner_prod += a_row[k] * b[k][j];
-                }
-
-                row[j] = inner_prod;
+    a.par_iter().enumerate().map(|(i, a_row)| {
+        let mut row = vec![Fr::zero(); b_width];
+        let k_start = i.saturating_sub(kernel_width);
+        let k_end = (i + kernel_width + 1).min(a_width);
+        for j in 0..b_width {
+            for k in k_start..k_end {
+                row[j] += a_row[k] * b[k][j];
             }
-            row
-        })
-        .collect()
+        }
+        row
+    }).collect()
 }
 
-// Matrix-matrix product AB where B is a band matrix (parallelized)
-// A can be any matrix
-// B has band structure: non-zero entries within kernel_width of diagonal
-fn matrix_matrix_product_band_right(
-    a: &[Vec<Fr>],
-    b: &[Vec<Fr>],
-    kernel_width: usize,
-) -> Vec<Vec<Fr>> {
-    let a_height = a.len();
-    assert!(a_height > 0);
-    let a_width = a[0].len();
-
+fn matrix_matrix_product_band_right(a: &[Vec<Fr>], b: &[Vec<Fr>], kernel_width: usize) -> Vec<Vec<Fr>> {
     let b_height = b.len();
-    assert!(b_height > 0);
     let b_width = b[0].len();
-
-    assert!(
-        a_width == b_height,
-        "Matrix dimensions incompatible for multiplication"
-    );
-
-    // Process rows in parallel
-    a.par_iter()
-        .map(|a_row| {
-            let mut row = vec![Fr::zero(); b_width];
-
-            for j in 0..b_width {
-                let mut inner_prod = Fr::zero();
-
-                // For column j of B, non-zero entries are in rows [j-kernel_width, j+kernel_width]
-                let k_start = j.saturating_sub(kernel_width);
-                let k_end = (j + kernel_width + 1).min(b_height);
-
-                // Only iterate over the band where B[k][j] is non-zero
-                for k in k_start..k_end {
-                    inner_prod += a_row[k] * b[k][j];
-                }
-
-                row[j] = inner_prod;
+    a.par_iter().map(|a_row| {
+        let mut row = vec![Fr::zero(); b_width];
+        for j in 0..b_width {
+            let k_start = j.saturating_sub(kernel_width);
+            let k_end = (j + kernel_width + 1).min(b_height);
+            for k in k_start..k_end {
+                row[j] += a_row[k] * b[k][j];
             }
-            row
-        })
-        .collect()
+        }
+        row
+    }).collect()
 }
 
-// Creates a matrix with 1's on main diagonal and adjacent diagonals
-// This is a simple test matrix that I used for debugging and benchmarking.
+// ── Matrix constructors ──────────────────────────────────────────────────────
+
 fn create_tridiagonal_matrix(size: usize) -> Vec<Vec<Fr>> {
-    assert!(size > 0, "Matrix size must be positive");
-
     let mut matrix = vec![vec![Fr::zero(); size]; size];
-
     for i in 0..size {
-        // Main diagonal
         matrix[i][i] = Fr::one();
-
-        // Upper diagonal (if not in last row)
-        if i + 1 < size {
-            matrix[i][i + 1] = Fr::one();
-        }
-
-        // Lower diagonal (if not in first row)
-        if i > 0 {
-            matrix[i][i - 1] = Fr::one();
-        }
+        if i + 1 < size { matrix[i][i + 1] = Fr::one(); }
+        if i > 0 { matrix[i][i - 1] = Fr::one(); }
     }
-
     matrix
 }
 
-// the original matrix is m*n, the target resized image is p*q
-// then the vetical filter will be p*m
-// the horizontal filter will be n*q
 fn create_resizing_matrix(src_size: usize, dst_size: usize, for_horizontal: bool) -> Vec<Vec<Fr>> {
-    
-    // For horizontal (right matrix): need transpose, so create n × q, store as q × n
-    // For vertical (left matrix): create p × m directly
     let matrix = create_resize_matrix_impl(src_size, dst_size);
-    
-    if for_horizontal {
-        // Transpose for horizontal matrix
-        transpose(matrix)
-    } else {
-        matrix
-    }
+    if for_horizontal { transpose(matrix) } else { matrix }
 }
 
 fn create_resize_matrix_impl(src_size: usize, dst_size: usize) -> Vec<Vec<Fr>> {
     let filter_size = 4;
     let mut matrix = vec![vec![Fr::zero(); src_size]; dst_size];
-    
-    // x_inc is scaling factor in 16.16 fixed point
     let x_inc = ((src_size << 16) / dst_size + 1) >> 1;
-    
     for i in 0..dst_size {
-        // Get source position in 16.16 fixed point
         let src_pos = (i * x_inc) >> 15;
-        
-        // Get fractional part normalized to FILTER_BITS
         let xx_inc = x_inc & 0xffff;
         let xx = (xx_inc * (1 << FILTER_BITS)) / x_inc;
-        
-        // Calculate filter weights for this destination row
         for j in 0..filter_size {
-            let coeff_u64 = if j == 0 {
-                (1u64 << FILTER_BITS) - (xx as u64)
-            } else {
-                xx as u64
-            };
-            
-            // Place coefficient in matrix if within bounds
+            let coeff_u64 = if j == 0 { (1u64 << FILTER_BITS) - (xx as u64) } else { xx as u64 };
             let src_idx = src_pos + j;
-            if src_idx < src_size {
-                matrix[i][src_idx] = Fr::from(coeff_u64);
-            }
+            if src_idx < src_size { matrix[i][src_idx] = Fr::from(coeff_u64); }
         }
     }
-    
     matrix
 }
 
-// Returns true if |target - edited| < threshold (in canonical integer sense).
-// Works by checking if (target - edited) is a small positive or small negative
-// field element, i.e. its canonical representation is ≤ threshold or
-// the canonical representation of (edited - target) is ≤ threshold.
 fn diff_within_threshold(target: Fr, edited: Fr, threshold: u64) -> bool {
     let diff = target - edited;
-    if diff.is_zero() {
-        return true;
-    }
+    if diff.is_zero() { return true; }
     let repr = diff.into_bigint();
-    // Small positive: upper limbs are 0 and lowest limb ≤ threshold
     if repr.0[1] == 0 && repr.0[2] == 0 && repr.0[3] == 0 && repr.0[0] <= threshold {
         return true;
     }
-    // Small negative: check (-diff) the same way
     let neg_repr = (-diff).into_bigint();
     neg_repr.0[1] == 0 && neg_repr.0[2] == 0 && neg_repr.0[3] == 0 && neg_repr.0[0] <= threshold
 }
 
-// For each pixel where |target - edited| is within threshold, set edited = target
-// (making the diff exactly 0). This produces a sparse diff matrix which enables
-// sparse matrix batching optimisations in the prover.
-fn snap_to_target(
-    target: &[Vec<Fr>],
-    edited: &mut Vec<Vec<Fr>>,
-    threshold: u64,
-) {
+fn snap_to_target(target: &[Vec<Fr>], edited: &mut Vec<Vec<Fr>>, threshold: u64) {
     let mut snapped = 0usize;
     let total = target.len() * target[0].len();
     for i in 0..target.len() {
@@ -340,21 +216,13 @@ fn snap_to_target(
             }
         }
     }
-    println!(
-        "Snapped {}/{} pixels to zero diff ({:.1}% sparse)",
-        snapped,
-        total,
-        100.0 * snapped as f64 / total as f64
-    );
+    println!("Snapped {}/{} pixels to zero diff ({:.1}% sparse)", snapped, total, 100.0 * snapped as f64 / total as f64);
 }
 
 fn transpose(matrix: Vec<Vec<Fr>>) -> Vec<Vec<Fr>> {
     let rows = matrix.len();
-    if rows == 0 {
-        return vec![];
-    }
+    if rows == 0 { return vec![]; }
     let cols = matrix[0].len();
-    
     let mut transposed = vec![vec![Fr::zero(); rows]; cols];
     for i in 0..rows {
         for j in 0..cols {
@@ -366,78 +234,31 @@ fn transpose(matrix: Vec<Vec<Fr>>) -> Vec<Vec<Fr>> {
 
 fn gaussian_kernel1d(sigma: f64, radius: i32) -> Vec<f64> {
     let sigma2 = sigma * sigma;
-    let x: Vec<f64> = (-radius..=radius).map(|i| i as f64).collect();
-
-    let mut phi_x: Vec<f64> = x
-        .iter()
-        .map(|&xi| (-0.5 / sigma2 * xi * xi).exp())
-        .collect();
-
+    let mut phi_x: Vec<f64> = (-radius..=radius).map(|i| (-0.5 / sigma2 * (i as f64).powi(2)).exp()).collect();
     let sum: f64 = phi_x.iter().sum();
     phi_x.iter_mut().for_each(|val| *val /= sum);
-
     phi_x
 }
 
 fn gaussian_kernel1d_fixed_point(sigma: f64, radius: i32) -> Vec<Fr> {
-    let fp_kernel = gaussian_kernel1d(sigma, radius);
-    fp_kernel
-        .iter()
-        .map(|&x| Fr::from((x * KERNEL_SCALE as f64) as u64))
-        .collect()
+    gaussian_kernel1d(sigma, radius).iter().map(|&x| Fr::from((x * KERNEL_SCALE as f64) as u64)).collect()
 }
 
-// Size is the width/height of the matrix, radius is the radius of the kernel to generate.
 fn create_gblur_matrix(size: usize, sigma: f64, radius: usize) -> Vec<Vec<Fr>> {
-    assert!(size > 0, "Matrix size must be positive");
-    assert!(radius > 0, "Kernel radius must be positive");
-    assert!(sigma > 0.0, "Sigma must be positive");
-
     let mut matrix = vec![vec![Fr::zero(); size]; size];
     let kernel = gaussian_kernel1d_fixed_point(sigma, radius as i32);
     let kernel_len = kernel.len();
-
-    // kernel_len should be 2*radius + 1
-    assert_eq!(kernel_len, 2 * radius + 1, "Kernel length mismatch");
-
-    // For each row of the matrix
     for i in 0..size {
-        // Calculate which kernel elements can fit within the matrix bounds
         let left_overflow = if i < radius { radius - i } else { 0 };
-        let right_overflow = if i + radius >= size {
-            i + radius - size + 1
-        } else {
-            0
-        };
-
-        // Sum of mass that would fall outside the left edge
-        let left_mass: Fr = (0..left_overflow)
-            .map(|j| kernel[j].clone())
-            .fold(Fr::zero(), |acc, x| acc + x);
-
-        // Sum of mass that would fall outside the right edge
-        let right_mass: Fr = (kernel_len - right_overflow..kernel_len)
-            .map(|j| kernel[j].clone())
-            .fold(Fr::zero(), |acc, x| acc + x);
-
-        // Place kernel values along the row
+        let right_overflow = if i + radius >= size { i + radius - size + 1 } else { 0 };
+        let left_mass: Fr = (0..left_overflow).map(|j| kernel[j]).fold(Fr::zero(), |acc, x| acc + x);
+        let right_mass: Fr = (kernel_len - right_overflow..kernel_len).map(|j| kernel[j]).fold(Fr::zero(), |acc, x| acc + x);
         for (k_idx, j) in (i.saturating_sub(radius)..=(i + radius).min(size - 1)).enumerate() {
-            let kernel_offset = left_overflow + k_idx;
-            matrix[i][j] = kernel[kernel_offset].clone();
+            matrix[i][j] = kernel[left_overflow + k_idx];
         }
-
-        // Add the overflow mass to the edge elements
-        if left_overflow > 0 {
-            // Add left overflow mass to the leftmost element in this row
-            matrix[i][0] = matrix[i][0].clone() + left_mass;
-        }
-
-        if right_overflow > 0 {
-            // Add right overflow mass to the rightmost element in this row
-            matrix[i][size - 1] = matrix[i][size - 1].clone() + right_mass;
-        }
+        if left_overflow > 0 { matrix[i][0] = matrix[i][0] + left_mass; }
+        if right_overflow > 0 { matrix[i][size - 1] = matrix[i][size - 1] + right_mass; }
     }
-
     matrix
 }
 
@@ -454,179 +275,255 @@ fn parse_matrix_type(s: &str) -> Result<MatrixType, String> {
         "tridiagonal" => Ok(MatrixType::Tridiagonal),
         "resizing" => Ok(MatrixType::Resizing),
         "gblur" => Ok(MatrixType::GBlur),
-        _ => Err(format!(
-            "Invalid matrix type '{}'. Valid options are: tridiagonal, resizing, gblur",
-            s
-        )),
+        _ => Err(format!("Invalid matrix type '{}'. Valid options: tridiagonal, resizing, gblur", s)),
     }
 }
 
-fn main() {
-    // Parse command-line arguments
-    let args: Vec<String> = env::args().collect();
+// ── Delta helpers ────────────────────────────────────────────────────────────
 
+/// Load original_image from a Prover.toml at the given path.
+fn load_image(path: &Path) -> Vec<Vec<Fr>> {
+    let contents = fs::read_to_string(path)
+        .unwrap_or_else(|e| { eprintln!("Failed to read {}: {}", path.display(), e); process::exit(1); });
+    let inputs: ProverInputsMinimal = toml::from_str(&contents)
+        .unwrap_or_else(|e| { eprintln!("Failed to parse {}: {}", path.display(), e); process::exit(1); });
+    inputs.original_image.iter()
+        .map(|row| row.iter().map(|s| gen_scalar(s.parse::<u64>().expect("bad pixel"))).collect())
+        .collect()
+}
+
+/// Apply Gaussian blur to an image using precomputed matrices.
+fn apply_gblur(image: &[Vec<Fr>], v_matrix: &[Vec<Fr>], h_matrix: &[Vec<Fr>]) -> Vec<Vec<Fr>> {
+    let row_wise = matrix_matrix_product_band_left(v_matrix, image, GBLUR_RADIUS);
+    matrix_matrix_product_band_right(&row_wise, h_matrix, GBLUR_RADIUS)
+}
+
+/// Compute sparse delta batches between two frames.
+/// snap_threshold: if Some(t), pixels where |diff| <= t are treated as zero (maximise sparsity).
+fn compute_delta_batches(
+    frame_a: &[Vec<Fr>],
+    frame_b: &[Vec<Fr>],
+    snap_threshold: Option<u64>,
+) -> (Vec<Vec<Fr>>, Vec<Fr>, Vec<Vec<Fr>>) {
+    let height = frame_a.len();
+    let mut all_batches: Vec<Vec<Fr>> = Vec::new();
+    let mut all_is: Vec<Fr> = Vec::new();
+    let mut all_js: Vec<Vec<Fr>> = Vec::new();
+
+    'outer: for i in 0..height {
+        let row_changes: Vec<(usize, Fr)> = frame_a[i].iter()
+            .zip(frame_b[i].iter())
+            .enumerate()
+            .filter_map(|(j, (a, b))| {
+                if let Some(thresh) = snap_threshold {
+                    if diff_within_threshold(*a, *b, thresh) { return None; }
+                }
+                let d = *a - *b;
+                if d.is_zero() { None } else { Some((j, d)) }
+            })
+            .collect();
+
+        for chunk in row_changes.chunks(DELTA_BATCH_SIZE) {
+            let mut vals = vec![Fr::zero(); DELTA_BATCH_SIZE];
+            let mut cols = vec![Fr::zero(); DELTA_BATCH_SIZE];
+            for (k, &(j, d)) in chunk.iter().enumerate() {
+                vals[k] = d;
+                cols[k] = Fr::from(j as u64);
+            }
+            all_batches.push(vals);
+            all_is.push(Fr::from(i as u64));
+            all_js.push(cols);
+            if all_batches.len() >= MAX_DELTA_LENGTH {
+                eprintln!("Warning: delta exceeds MAX_DELTA_LENGTH={}, truncating", MAX_DELTA_LENGTH);
+                break 'outer;
+            }
+        }
+    }
+
+    // Pad to MAX_DELTA_LENGTH with zero entries (zero pixel_change contributes nothing to sums)
+    while all_batches.len() < MAX_DELTA_LENGTH {
+        all_batches.push(vec![Fr::zero(); DELTA_BATCH_SIZE]);
+        all_is.push(Fr::zero());
+        all_js.push(vec![Fr::zero(); DELTA_BATCH_SIZE]);
+    }
+
+    (all_batches, all_is, all_js)
+}
+
+// ── Modes ────────────────────────────────────────────────────────────────────
+
+/// Keyframe mode: prove full frame blur via dense Freivalds (video_blurring circuit).
+fn run_keyframe_mode(args: &[String]) {
     let matrix_type = if args.len() > 1 {
         match parse_matrix_type(&args[1]) {
             Ok(mt) => mt,
             Err(e) => {
                 eprintln!("Error: {}", e);
-                eprintln!("Usage: {} [matrix_type]", args[0]);
-                eprintln!("  matrix_type: tridiagonal (default), resizing, or gblur");
+                eprintln!("Usage: {} [gblur|tridiagonal|resizing]", args[0]);
                 process::exit(1);
             }
         }
     } else {
-        MatrixType::Tridiagonal // Default
+        MatrixType::Tridiagonal
     };
 
-    let adjust_factor = match matrix_type {
-        MatrixType::Resizing => 2,
-        _ => 1,
-    };
-
+    let adjust_factor = match matrix_type { MatrixType::Resizing => 2, _ => 1 };
     println!("Using matrix type: {:?}", matrix_type);
 
     let config_path = Path::new("Prover.toml");
-
     if !config_path.exists() {
-        eprintln!("Error: {} does not exist.", config_path.display());
+        eprintln!("Error: Prover.toml does not exist.");
         process::exit(1);
     }
 
-    // Read and parse TOML file
     let contents = fs::read_to_string(config_path).expect("Failed to read Prover.toml");
-
     let mut prover_inputs: ProverInputs = toml::from_str(&contents).expect("Failed to parse TOML");
 
     let image_height = prover_inputs.original_image.len();
     let image_width = prover_inputs.original_image[0].len();
 
-    let mut rng = rand::thread_rng();
-
-    // // Generate random image
-    // let random_image: Vec<Vec<_>> = (0..image_height)
-    //     .map(|_| {
-    //         (0..image_width)
-    //             .map(|_| gen_scalar(rng.gen_range(0..=255)))
-    //             .collect()
-    //     })
-    //     .collect();
-    // Convert loaded image to Vec<Vec<Fr>>
-    // just use variable name "random_image" but it is not random, it
-    // is loaded from toml
-    let random_image: Vec<Vec<Fr>> = prover_inputs.original_image
-        .iter()
-        .map(|row| {
-            row.iter()
-                .map(|pixel_str| {
-                    let value: u64 = pixel_str.parse().expect("Failed to parse pixel value");
-                    gen_scalar(value)
-                })
-                .collect()
-        })
+    let random_image: Vec<Vec<Fr>> = prover_inputs.original_image.iter()
+        .map(|row| row.iter().map(|s| gen_scalar(s.parse::<u64>().expect("bad pixel"))).collect())
         .collect();
-    
+
     let horizontal_edit_matrix = create_matrix(matrix_type, image_width, true);
     let vertical_edit_matrix = create_matrix(matrix_type, image_height, false);
 
     println!("Image dimensions: {} × {} (height × width)", image_height, image_width);
-    println!("Horizontal matrix dimensions: {} × {}", 
-        horizontal_edit_matrix.len(), 
-        horizontal_edit_matrix[0].len()
-    );
-    println!("Vertical matrix dimensions: {} × {}", 
-        vertical_edit_matrix.len(), 
-        vertical_edit_matrix[0].len()
-    );
-    // let horizontal_resize_matrix = create_matrix(matrix_type, image_width);
-    // let vertical_resize_matrix = create_matrix(matrix_type, image_height);
+    println!("Horizontal matrix dimensions: {} × {}", horizontal_edit_matrix.len(), horizontal_edit_matrix[0].len());
+    println!("Vertical matrix dimensions: {} × {}", vertical_edit_matrix.len(), vertical_edit_matrix[0].len());
 
-    let bandwidth = match matrix_type {
-        MatrixType::Resizing => 4,
-        MatrixType::GBlur => GBLUR_RADIUS,
-        MatrixType::Tridiagonal => 1,
-    };
+    let bandwidth = match matrix_type { MatrixType::Resizing => 4, MatrixType::GBlur => GBLUR_RADIUS, MatrixType::Tridiagonal => 1 };
 
-    // Note: gblurr radius is an upper bound on the kernel radius to speed up the matrix math.
     let row_wise_edited_image = if matches!(matrix_type, MatrixType::Resizing) {
-        // For resizing, use full multiplication (it's fast enough since matrices are small)
         matrix_matrix_product(&vertical_edit_matrix, &random_image)
     } else {
-        // For blur, use band optimization
-        matrix_matrix_product_band_left(
-            &vertical_edit_matrix,
-            &random_image,
-            bandwidth,
-        )
+        matrix_matrix_product_band_left(&vertical_edit_matrix, &random_image, bandwidth)
     };
 
     let edited_image = if matches!(matrix_type, MatrixType::Resizing) {
         matrix_matrix_product(&row_wise_edited_image, &horizontal_edit_matrix)
     } else {
-        matrix_matrix_product_band_right(
-            &row_wise_edited_image,
-            &horizontal_edit_matrix,
-            bandwidth,
-        )
+        matrix_matrix_product_band_right(&row_wise_edited_image, &horizontal_edit_matrix, bandwidth)
     };
 
     let target_middle_image = edited_image.clone();
 
-    // If the input Prover.toml already contains an actual edited image (e.g. the
-    // real video output from a codec/pipeline), load it and snap small pixel
-    // differences to 0 so the diff matrix is sparse. Otherwise fall back to the
-    // computed blur (current behaviour: diff is trivially 0).
     let mut edited_image = if prover_inputs.edited_image.is_empty() {
         edited_image.clone()
     } else {
-        prover_inputs.edited_image
-            .iter()
-            .map(|row| {
-                row.iter()
-                    .map(|pixel_str| {
-                        let value: u64 = pixel_str.parse().expect("Failed to parse edited pixel");
-                        gen_scalar(value)
-                    })
-                    .collect()
-            })
+        prover_inputs.edited_image.iter()
+            .map(|row| row.iter().map(|s| gen_scalar(s.parse::<u64>().expect("bad pixel"))).collect())
             .collect()
     };
 
-    // Snap pixels within threshold to make the diff matrix sparse.
-    // Threshold must be < PIXEL_THRESHOLD_FELT in the Noir circuit (currently 10).
     let snap_threshold: u64 = 9;
     snap_to_target(&target_middle_image, &mut edited_image, snap_threshold);
 
+    let mut rng = rand::thread_rng();
     let r: Vec<_> = (0..image_height / adjust_factor).map(|_| gen_rand_scalar()).collect();
     println!("r dimensions: {}", r.len());
 
     let rTA = vector_matrix_product(&r, &vertical_edit_matrix);
-
     let s: Vec<_> = (0..image_width / adjust_factor).map(|_| gen_rand_scalar()).collect();
-
     let As = matrix_vector_product(&horizontal_edit_matrix, &s);
 
-    // Do Freivald's verification for sanity check, etc.
     let rTAI = vector_matrix_product(&rTA, &random_image);
     let rTAIAs = inner_product(&rTAI, &As);
-
     let rTF = vector_matrix_product(&r, &target_middle_image);
     let rTFs = inner_product(&rTF, &s);
 
     println!("LHS: {:?}", rTAIAs);
     println!("RHS: {:?}", rTFs);
 
-    // Update prover_inputs
     prover_inputs.original_image = scalar_matrix_to_string_matrix(random_image);
     prover_inputs.target_middle_image = scalar_matrix_to_string_matrix(target_middle_image);
     prover_inputs.edited_image = scalar_matrix_to_string_matrix(edited_image);
     prover_inputs.r = scalar_vec_to_string_vec(r);
     prover_inputs.s = scalar_vec_to_string_vec(s);
-    prover_inputs.rTA = scalar_vec_to_string_vec(rTA.clone());
-    prover_inputs.As = scalar_vec_to_string_vec(As.clone());
+    prover_inputs.rTA = scalar_vec_to_string_vec(rTA);
+    prover_inputs.As = scalar_vec_to_string_vec(As);
 
-    // Serialize and write back to file
-    let toml_string = toml::to_string(&prover_inputs).expect("Failed to serialize to TOML");
+    let toml_string = toml::to_string(&prover_inputs).expect("Failed to serialize");
+    fs::write(config_path, toml_string).expect("Failed to write Prover.toml");
+}
 
-    fs::write(config_path, toml_string).expect("Failed to write to Prover.toml");
+/// Delta mode: prove non-keyframe by comparing frame[t] with frame[t-1].
+/// Reads current frame from ./Prover.toml, previous frame from the given path.
+/// Writes non-keyframe Prover.toml (non_keyframe_edits circuit inputs) to ./Prover.toml.
+fn run_delta_mode(args: &[String]) {
+    if args.len() < 3 {
+        eprintln!("Usage: {} delta <prev_prover_toml_path>", args[0]);
+        process::exit(1);
+    }
+
+    let current_path = Path::new("Prover.toml");
+    let prev_path = Path::new(&args[2]);
+
+    let current_original = load_image(current_path);
+    let prev_original = load_image(prev_path);
+
+    let height = current_original.len();
+    let width = current_original[0].len();
+    println!("Delta mode: {}x{} image", height, width);
+
+    let v_matrix = create_gblur_matrix(height, SIGMA, GBLUR_RADIUS);
+    let h_matrix = create_gblur_matrix(width, SIGMA, GBLUR_RADIUS);
+
+    // Blur both frames to compute rT_delta_blur_s outside the circuit.
+    println!("Blurring current frame...");
+    let current_blurred = apply_gblur(&current_original, &v_matrix, &h_matrix);
+    println!("Blurring previous frame...");
+    let prev_blurred = apply_gblur(&prev_original, &v_matrix, &h_matrix);
+
+    // Original delta: include ALL non-zero pixel changes (no threshold).
+    // A threshold would cause the sparse delta to diverge from the true current-prev difference,
+    // breaking the Freivalds equality rTA * delta * As == r * (blur_current - blur_prev) * s.
+    println!("Computing original delta batches...");
+    let (delta_batches, delta_is, delta_js) =
+        compute_delta_batches(&current_original, &prev_original, None);
+
+    // Freivalds vectors: real r^T×A_v and A_h×s
+    let r: Vec<Fr> = (0..height).map(|_| gen_rand_scalar()).collect();
+    let rTA = vector_matrix_product(&r, &v_matrix);
+    let s: Vec<Fr> = (0..width).map(|_| gen_rand_scalar()).collect();
+    let As = matrix_vector_product(&h_matrix, &s);
+
+    // Compute rT_delta_blur_s = r^T × (blur(current) - blur(prev)) × s densely outside the circuit.
+    // This is O(H×W) Rust computation — no circuit constraints needed.
+    // The circuit proves this scalar equals r^T × A × delta_original × s (sparse).
+    println!("Computing rT_delta_blur_s (dense, outside circuit)...");
+    let rT_delta_blur_s: Fr = (0..height).map(|i| {
+        let row_sum: Fr = (0..width).map(|j| {
+            (current_blurred[i][j] - prev_blurred[i][j]) * s[j]
+        }).sum();
+        r[i] * row_sum
+    }).sum();
+
+    let delta_inputs = DeltaProverInputs {
+        delta_batches: scalar_matrix_to_string_matrix(delta_batches),
+        delta_is: scalar_vec_to_string_vec(delta_is),
+        delta_js: scalar_matrix_to_string_matrix(delta_js),
+        rT_delta_blur_s: format!("{:?}", rT_delta_blur_s),
+        r: scalar_vec_to_string_vec(r),
+        s: scalar_vec_to_string_vec(s),
+        rTA: scalar_vec_to_string_vec(rTA),
+        As: scalar_vec_to_string_vec(As),
+    };
+
+    let toml_string = toml::to_string(&delta_inputs).expect("Failed to serialize");
+    fs::write("Prover.toml", toml_string).expect("Failed to write Prover.toml");
+    println!("Non-keyframe Prover.toml written.");
+}
+
+// ── Entry point ──────────────────────────────────────────────────────────────
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() > 1 && args[1].to_lowercase() == "delta" {
+        run_delta_mode(&args);
+    } else {
+        run_keyframe_mode(&args);
+    }
 }
