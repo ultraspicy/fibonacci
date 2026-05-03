@@ -74,7 +74,8 @@ fi
 
 # ── Python packages ─────────────────────────────────────────────────────────
 info "Installing Python packages (opencv-python, numpy)..."
-python3 -m pip install --quiet opencv-python numpy
+python3 -m pip install --quiet opencv-python numpy --break-system-packages \
+    || python3 -m pip install --quiet opencv-python numpy
 ok "Python packages (opencv-python, numpy)"
 
 # ── Nargo (Noir) ────────────────────────────────────────────────────────────
