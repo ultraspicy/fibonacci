@@ -26,9 +26,10 @@ RUST_BINARY="$(dirname "$SCRIPT_DIR")/target/release/generate_freivalds_inputs"
 
 ms() { python3 -c "import time; print(int(time.time() * 1000))"; }
 
-# Temp dir for per-job result files; cleaned up on exit
+# Temp dirs for per-job result and log files; cleaned up on exit
 RESULTS_DIR=$(mktemp -d)
-trap 'rm -rf "$RESULTS_DIR"' EXIT
+LOG_DIR=$(mktemp -d)
+trap 'rm -rf "$RESULTS_DIR" "$LOG_DIR"' EXIT
 
 # ── Pre-flight: build Rust binary once ──────────────────────────────────────
 echo "===== Building Rust binary ====="
@@ -87,6 +88,7 @@ prove_job() {
     local frame_type=$3
     local input_file=$4
     local result_file="$RESULTS_DIR/${frame_num}_${channel}"
+    local log_file="$LOG_DIR/${frame_num}_${channel}.log"
 
     local job_dir
     job_dir=$(mktemp -d)
@@ -102,13 +104,21 @@ prove_job() {
     if [[ "$frame_type" == "keyframe" ]]; then
         cp "$input_file" "$job_dir/Prover.toml"
         cd "$job_dir"
-        "$RUST_BINARY" gblur > /dev/null 2>&1
+        "$RUST_BINARY" gblur > /dev/null 2>>"$log_file"
     else
         local prev_frame_num=$(( frame_num - 1 ))
         local prev_input="$INPUT_DIR/Prover_$(printf '%04d' "$prev_frame_num")_${channel}.toml"
         cp "$input_file" "$job_dir/Prover.toml"
         cd "$job_dir"
-        "$RUST_BINARY" delta "$prev_input" > /dev/null 2>&1
+        local delta_rc=0
+        "$RUST_BINARY" delta "$prev_input" > /dev/null 2>>"$log_file" || delta_rc=$?
+        if [[ $delta_rc -eq 2 ]]; then
+            # Delta too large — Prover.toml still has keyframe data; run as keyframe instead.
+            frame_type="keyframe"
+            "$RUST_BINARY" gblur > /dev/null 2>>"$log_file"
+        elif [[ $delta_rc -ne 0 ]]; then
+            exit $delta_rc
+        fi
     fi
 
     # 2. Set up an isolated nargo workspace.
@@ -135,7 +145,7 @@ prove_job() {
     local w_start w_end
     w_start=$(ms)
     cd "$circuit_dir"
-    nargo execute > /dev/null 2>&1
+    nargo execute > /dev/null 2>>"$log_file"
     w_end=$(ms)
 
     # 4. Proof generation
@@ -146,7 +156,7 @@ prove_job() {
         -w "./target/${circuit_name}.gz" \
         -o "./target" \
         --vk_path "./target/vk" \
-        -c "$HOME/.bb-crs" > /dev/null 2>&1
+        -c "$HOME/.bb-crs" > /dev/null 2>>"$log_file"
     p_end=$(ms)
 
     local witness_ms=$(( w_end - w_start ))
@@ -213,8 +223,12 @@ for result_file in $(ls "$RESULTS_DIR" | sort); do
         "$(echo "scale=1; $prove_ms/1000" | bc)" \
         "$(echo "scale=1; $total_ms/1000" | bc)"
 
-    (( FRAME_COUNT++ ))
-    [[ "$frame_type" == "keyframe" ]] && (( KEYFRAME_PROOFS++ )) || (( NONKEYFRAME_PROOFS++ ))
+    (( FRAME_COUNT += 1 ))
+    if [[ "$frame_type" == "keyframe" ]]; then
+        (( KEYFRAME_PROOFS += 1 ))
+    else
+        (( NONKEYFRAME_PROOFS += 1 ))
+    fi
 done
 
 echo "================================================================"
@@ -222,3 +236,20 @@ echo "Total proofs:       $FRAME_COUNT"
 echo "  Keyframe proofs:  $KEYFRAME_PROOFS"
 echo "  Non-keyframe:     $NONKEYFRAME_PROOFS"
 echo "Total time:         $((OVERALL_ELAPSED/60))m $((OVERALL_ELAPSED%60))s"
+
+# Report any jobs that failed (log file exists but no result file)
+FAILED=0
+for log_file in "$LOG_DIR"/*.log; do
+    [[ -f "$log_file" ]] || continue
+    base=$(basename "$log_file" .log)
+    if [[ ! -f "$RESULTS_DIR/$base" ]]; then
+        if [[ $FAILED -eq 0 ]]; then
+            echo ""
+            echo "Failed jobs (check logs for details):"
+        fi
+        echo "  $base:"
+        sed 's/^/    /' "$log_file"
+        (( FAILED += 1 ))
+    fi
+done
+[[ $FAILED -gt 0 ]] && echo "  ($FAILED jobs failed)" || true

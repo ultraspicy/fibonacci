@@ -300,17 +300,18 @@ fn apply_gblur(image: &[Vec<Fr>], v_matrix: &[Vec<Fr>], h_matrix: &[Vec<Fr>]) ->
 
 /// Compute sparse delta batches between two frames.
 /// snap_threshold: if Some(t), pixels where |diff| <= t are treated as zero (maximise sparsity).
+/// Returns None if the delta exceeds MAX_DELTA_LENGTH (caller should fall back to keyframe mode).
 fn compute_delta_batches(
     frame_a: &[Vec<Fr>],
     frame_b: &[Vec<Fr>],
     snap_threshold: Option<u64>,
-) -> (Vec<Vec<Fr>>, Vec<Fr>, Vec<Vec<Fr>>) {
+) -> Option<(Vec<Vec<Fr>>, Vec<Fr>, Vec<Vec<Fr>>)> {
     let height = frame_a.len();
     let mut all_batches: Vec<Vec<Fr>> = Vec::new();
     let mut all_is: Vec<Fr> = Vec::new();
     let mut all_js: Vec<Vec<Fr>> = Vec::new();
 
-    'outer: for i in 0..height {
+    for i in 0..height {
         let row_changes: Vec<(usize, Fr)> = frame_a[i].iter()
             .zip(frame_b[i].iter())
             .enumerate()
@@ -334,8 +335,8 @@ fn compute_delta_batches(
             all_is.push(Fr::from(i as u64));
             all_js.push(cols);
             if all_batches.len() >= MAX_DELTA_LENGTH {
-                eprintln!("Warning: delta exceeds MAX_DELTA_LENGTH={}, truncating", MAX_DELTA_LENGTH);
-                break 'outer;
+                eprintln!("Delta exceeds MAX_DELTA_LENGTH={}, falling back to keyframe", MAX_DELTA_LENGTH);
+                return None;
             }
         }
     }
@@ -347,7 +348,7 @@ fn compute_delta_batches(
         all_js.push(vec![Fr::zero(); DELTA_BATCH_SIZE]);
     }
 
-    (all_batches, all_is, all_js)
+    Some((all_batches, all_is, all_js))
 }
 
 // ── Modes ────────────────────────────────────────────────────────────────────
@@ -480,8 +481,13 @@ fn run_delta_mode(args: &[String]) {
     // A threshold would cause the sparse delta to diverge from the true current-prev difference,
     // breaking the Freivalds equality rTA * delta * As == r * (blur_current - blur_prev) * s.
     println!("Computing original delta batches...");
-    let (delta_batches, delta_is, delta_js) =
-        compute_delta_batches(&current_original, &prev_original, None);
+    let Some((delta_batches, delta_is, delta_js)) =
+        compute_delta_batches(&current_original, &prev_original, None)
+    else {
+        // Too many pixels changed — Prover.toml still has the original keyframe data.
+        // Exit code 2 tells the shell script to re-run this frame as a keyframe.
+        process::exit(2);
+    };
 
     // Freivalds vectors: real r^T×A_v and A_h×s
     let r: Vec<Fr> = (0..height).map(|_| gen_rand_scalar()).collect();
