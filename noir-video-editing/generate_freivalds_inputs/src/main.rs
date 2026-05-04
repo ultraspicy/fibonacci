@@ -16,7 +16,9 @@ static KERNEL_SCALE: u64 = 1u64 << 32;
 static FILTER_BITS: usize = 16;
 
 const DELTA_BATCH_SIZE: usize = 10;
-const MAX_DELTA_LENGTH: usize = 128 * 360; // max 460,800 changed pixels (~50% of frame)
+// 2*(IMAGE_HEIGHT + MAX_DELTA_LENGTH) - 1 must be ≤ 65535 (barretenberg MAX_SMALL_RANGE_CONSTRAINT_VAL)
+// IMAGE_HEIGHT=720 → MAX_DELTA_LENGTH ≤ 32048
+const MAX_DELTA_LENGTH: usize = 32000; // max 320,000 changed pixels (~34% of frame)
 
 // ── Prover.toml structs ──────────────────────────────────────────────────────
 
@@ -468,24 +470,27 @@ fn run_delta_mode(args: &[String]) {
     let width = current_original[0].len();
     println!("Delta mode: {}x{} image", height, width);
 
+    // Snap current toward prev: pixels differing by ≤ threshold are treated as unchanged.
+    // Both delta_batches and rT_delta_blur_s use this snapped frame, keeping Freivalds consistent:
+    //   r^T × A × delta_snapped × s  ==  r^T × (blur(current_snapped) - blur(prev)) × s  ✓
+    const DELTA_SNAP_THRESHOLD: u64 = 9;
+    let mut current_snapped = current_original.clone();
+    snap_to_target(&prev_original, &mut current_snapped, DELTA_SNAP_THRESHOLD);
+
     let v_matrix = create_gblur_matrix(height, SIGMA, GBLUR_RADIUS);
     let h_matrix = create_gblur_matrix(width, SIGMA, GBLUR_RADIUS);
 
-    // Blur both frames to compute rT_delta_blur_s outside the circuit.
-    println!("Blurring current frame...");
-    let current_blurred = apply_gblur(&current_original, &v_matrix, &h_matrix);
+    println!("Blurring snapped current frame...");
+    let current_blurred = apply_gblur(&current_snapped, &v_matrix, &h_matrix);
     println!("Blurring previous frame...");
     let prev_blurred = apply_gblur(&prev_original, &v_matrix, &h_matrix);
 
-    // Original delta: include ALL non-zero pixel changes (no threshold).
-    // A threshold would cause the sparse delta to diverge from the true current-prev difference,
-    // breaking the Freivalds equality rTA * delta * As == r * (blur_current - blur_prev) * s.
-    println!("Computing original delta batches...");
+    println!("Computing delta batches...");
     let Some((delta_batches, delta_is, delta_js)) =
-        compute_delta_batches(&current_original, &prev_original, None)
+        compute_delta_batches(&current_snapped, &prev_original, None)
     else {
-        // Too many pixels changed — Prover.toml still has the original keyframe data.
-        // Exit code 2 tells the shell script to re-run this frame as a keyframe.
+        // Too many pixels changed even after snapping — fall back to keyframe.
+        // Prover.toml still has the original keyframe data.
         process::exit(2);
     };
 
@@ -495,9 +500,8 @@ fn run_delta_mode(args: &[String]) {
     let s: Vec<Fr> = (0..width).map(|_| gen_rand_scalar()).collect();
     let As = matrix_vector_product(&h_matrix, &s);
 
-    // Compute rT_delta_blur_s = r^T × (blur(current) - blur(prev)) × s densely outside the circuit.
-    // This is O(H×W) Rust computation — no circuit constraints needed.
-    // The circuit proves this scalar equals r^T × A × delta_original × s (sparse).
+    // Compute rT_delta_blur_s = r^T × (blur(current_snapped) - blur(prev)) × s.
+    // Uses the snapped frame — matches what the circuit will verify via the sparse delta.
     println!("Computing rT_delta_blur_s (dense, outside circuit)...");
     let rT_delta_blur_s: Fr = (0..height).map(|i| {
         let row_sum: Fr = (0..width).map(|j| {

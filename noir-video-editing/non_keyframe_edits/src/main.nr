@@ -1,7 +1,8 @@
 global IMAGE_HEIGHT: u32 = 720;
 global IMAGE_WIDTH: u32 = 1280;
 global DELTA_BATCH_SIZE: u32 = 10;
-global MAX_DELTA_LENGTH: u32 = 128 * 360; // 50% of pixels, divided by 10 for delta batch size.
+// 2*(IMAGE_HEIGHT + MAX_DELTA_LENGTH) - 1 must be <= 65535 (barretenberg MAX_SMALL_RANGE_CONSTRAINT_VAL)
+global MAX_DELTA_LENGTH: u32 = 32000; // ~34% of pixels, divided by 10 for delta batch size.
 
 // This only edits the video at a few deltas. We "batch" the deltas in groups of DELTA_BATCH_SIZE.
 // This avoids some memory accesses at undetermined indices, which is one of the main costs.
