@@ -99,28 +99,15 @@ if command -v bb &>/dev/null; then
     ok "bb (barretenberg)"
 else
     info "Installing bb (barretenberg)..."
-    if [[ "$PKG_MGR" == "brew" ]]; then
-        if ! command -v bbup &>/dev/null; then
-            curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/bbup/install | bash
-            export PATH="$HOME/.bb:$PATH"
-        fi
-        if command -v bbup &>/dev/null; then
-            bbup
-            ok "bb installed"
-        else
-            warn "bbup installed but not on PATH — open a new shell and run: bbup"
-        fi
-    else
-        # Linux: build from source or use the pre-built binary
-        BB_VERSION="0.82.2"
-        BB_URL="https://github.com/AztecProtocol/aztec-packages/releases/download/aztec-packages-v${BB_VERSION}/barretenberg-x86_64-linux-gnu.tar.gz"
-        info "Downloading bb binary for Linux (v${BB_VERSION})..."
-        mkdir -p "$HOME/.bb"
-        curl -L "$BB_URL" | tar -xz -C "$HOME/.bb"
-        chmod +x "$HOME/.bb/bb"
+    if ! command -v bbup &>/dev/null; then
+        curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/bbup/install | bash
         export PATH="$HOME/.bb:$PATH"
-        ok "bb installed to ~/.bb/bb"
-        warn "Add ~/.bb to your PATH: export PATH=\"\$HOME/.bb:\$PATH\""
+    fi
+    if command -v bbup &>/dev/null; then
+        bbup
+        ok "bb installed"
+    else
+        warn "bbup installed but not on PATH — open a new shell and run: bbup"
     fi
 fi
 
