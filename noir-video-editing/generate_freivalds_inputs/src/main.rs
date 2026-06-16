@@ -249,17 +249,14 @@ fn gaussian_kernel1d_fixed_point(sigma: f64, radius: i32) -> Vec<Fr> {
 fn create_gblur_matrix(size: usize, sigma: f64, radius: usize) -> Vec<Vec<Fr>> {
     let mut matrix = vec![vec![Fr::zero(); size]; size];
     let kernel = gaussian_kernel1d_fixed_point(sigma, radius as i32);
-    let kernel_len = kernel.len();
+    let r = radius as i64;
+    let n = size as i64;
     for i in 0..size {
-        let left_overflow = if i < radius { radius - i } else { 0 };
-        let right_overflow = if i + radius >= size { i + radius - size + 1 } else { 0 };
-        let left_mass: Fr = (0..left_overflow).map(|j| kernel[j]).fold(Fr::zero(), |acc, x| acc + x);
-        let right_mass: Fr = (kernel_len - right_overflow..kernel_len).map(|j| kernel[j]).fold(Fr::zero(), |acc, x| acc + x);
-        for (k_idx, j) in (i.saturating_sub(radius)..=(i + radius).min(size - 1)).enumerate() {
-            matrix[i][j] = kernel[left_overflow + k_idx];
+        for (k_pos, &w) in kernel.iter().enumerate() {
+            // edge-clamp padding: out-of-bounds positions map to the nearest edge pixel
+            let j = (i as i64 - r + k_pos as i64).clamp(0, n - 1) as usize;
+            matrix[i][j] = matrix[i][j] + w;
         }
-        if left_overflow > 0 { matrix[i][0] = matrix[i][0] + left_mass; }
-        if right_overflow > 0 { matrix[i][size - 1] = matrix[i][size - 1] + right_mass; }
     }
     matrix
 }
