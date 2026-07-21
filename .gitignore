@@ -17,7 +17,10 @@
 /noir-video-editing/*/target/
 /noir-video-editing/*/Prover.toml/
 
-video_representation_experiments/downloaded_videos/*
+video-representation-experiments/downloaded_videos/
+
+# vid.stab motion-analysis files
+**/*.trf
 
 video-resizing-freivalds/init/config.json
 video-resizing-freivalds/script/config.json
